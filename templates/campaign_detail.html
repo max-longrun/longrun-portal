@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campaign Details - Lead Generation Analytics</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Custom Brand Colors Override -->
+    <style>
+        .btn-primary {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .btn-primary:hover {
+            background-color: #e55a2b;
+            border-color: #e55a2b;
+        }
+        .btn-outline-primary {
+            color: var(--bright-orange);
+            border-color: var(--bright-orange);
+        }
+        .btn-outline-primary:hover {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .btn-outline-primary.active {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .text-muted {
+            color: var(--text-secondary) !important;
+        }
+        .navbar-toggler {
+            border-color: var(--bright-orange);
+        }
+        .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 107, 53, 1%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='m4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+    </style>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Custom Campaign Detail Styles -->
+    <style>
+        .campaign-header {
+            background: linear-gradient(135deg, var(--primary-black) 0%, #1a1a1a 100%);
+            color: var(--primary-white);
+            padding: 40px 0;
+            margin-bottom: 40px;
+        }
+        
+        .campaign-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+        
+        .campaign-subtitle {
+            font-size: 1.1rem;
+            opacity: 0.8;
+            margin: 8px 0 0 0;
+        }
+        
+        .campaign-status {
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 10px;
+            display: inline-block;
+        }
+        
+        .status-active {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .status-paused {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+        
+        .status-finished, .status-completed {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+        }
+        
+        .status-draft {
+            background: linear-gradient(135deg, #9ca3af, #6b7280);
+            color: white;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 249, 250, 0.9) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--bright-orange);
+            margin: 0;
+        }
+        
+        .metric-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin: 8px 0 0 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .chart-section {
+            margin-bottom: 40px;
+        }
+        
+        .chart-card {
+            background: var(--primary-white);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        
+        .chart-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+        
+        .replies-section {
+            margin-top: 40px;
+        }
+        
+        .replies-tabs {
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+        
+        .replies-tab {
+            padding: 12px 24px;
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .replies-tab.active {
+            color: var(--bright-orange);
+            border-bottom-color: var(--bright-orange);
+        }
+        
+        .replies-tab:hover {
+            color: var(--bright-orange);
+        }
+        
+        .reply-card {
+            background: var(--primary-white);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .reply-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        .reply-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        
+        .reply-contact {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .reply-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--bright-orange), #ff8c42);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .reply-info h6 {
+            margin: 0;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .reply-info small {
+            color: var(--text-secondary);
+        }
+        
+        .reply-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .reply-action-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--primary-white);
+            color: var(--bright-orange);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        .reply-action-btn:hover {
+            background: var(--bright-orange);
+            color: var(--primary-white);
+            border-color: var(--bright-orange);
+        }
+        
+        .reply-content {
+            background: var(--light-gray);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: var(--text-primary);
+        }
+        
+        .reply-subject {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+        
+        .reply-date {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .status-interested {
+            background: rgba(16, 185, 129, 0.1);
+            color: #059669;
+        }
+        
+        .status-replied {
+            background: rgba(59, 130, 246, 0.1);
+            color: #1d4ed8;
+        }
+        
+        .loading-container {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            color: var(--bright-orange);
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-chart-line me-2"></i>LeadGen Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-users me-1"></i>Leads</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/campaigns"><i class="fas fa-envelope me-1"></i>Campaigns</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-cog me-1"></i>Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Campaign Header -->
+    <div class="campaign-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h1 id="campaignTitle" class="campaign-title">Loading...</h1>
+                    <p id="campaignSubtitle" class="campaign-subtitle">Campaign Details</p>
+                    <span id="campaignStatus" class="campaign-status">Loading...</span>
+                </div>
+                <div>
+                    <a href="/campaigns" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Campaigns
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-container">
+            <div class="spinner"></div>
+            <p class="loading-text">Loading campaign details...</p>
+        </div>
+
+        <!-- Campaign Content -->
+        <div id="campaignContent" style="display: none;">
+            <!-- Metrics Grid -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h2 class="metric-value" id="totalContacted">-</h2>
+                    <p class="metric-label">Contacted</p>
+                </div>
+                <div class="metric-card">
+                    <h2 class="metric-value" id="totalLeads">-</h2>
+                    <p class="metric-label">Leads</p>
+                </div>
+                <div class="metric-card">
+                    <h2 class="metric-value" id="replyRate">-%</h2>
+                    <p class="metric-label">Reply Rate</p>
+                </div>
+                <div class="metric-card">
+                    <h2 class="metric-value" id="positiveRate">-%</h2>
+                    <p class="metric-label">Positive Rate</p>
+                </div>
+                <div class="metric-card">
+                    <h2 class="metric-value" id="emailsSent">-</h2>
+                    <p class="metric-label">Emails Sent</p>
+                </div>
+                <div class="metric-card">
+                    <h2 class="metric-value" id="totalReplies">-</h2>
+                    <p class="metric-label">Replies</p>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Campaign Performance</h3>
+                        <canvas id="performanceChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-4">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Reply Timeline</h3>
+                        <canvas id="timelineChart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Replies Section -->
+            <div class="replies-section">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3 class="mb-0">Replies</h3>
+                    <div class="replies-tabs">
+                        <button class="replies-tab active" onclick="switchTab('positive')" id="positiveTab">
+                            Positive (<span id="positiveCount">0</span>)
+                        </button>
+                        <button class="replies-tab" onclick="switchTab('all')" id="allTab">
+                            All (<span id="allCount">0</span>)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading State for Replies -->
+                <div id="repliesLoading" class="loading-container" style="display: none;">
+                    <div class="spinner"></div>
+                    <p class="loading-text">Loading replies...</p>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyReplies" class="empty-state" style="display: none;">
+                    <i class="fas fa-comments"></i>
+                    <h4>No Replies Found</h4>
+                    <p>This campaign doesn't have any replies yet.</p>
+                </div>
+
+                <!-- Replies Container -->
+                <div id="repliesContainer">
+                    <!-- Replies will be dynamically loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Campaign Detail JavaScript -->
+    <script>
+        let campaignData = null;
+        let repliesData = null;
+        let currentTab = 'positive';
+        let performanceChart = null;
+        let timelineChart = null;
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            const campaignId = {{ campaign_id }};
+            loadCampaignDetails(campaignId);
+            loadCampaignReplies(campaignId);
+        });
+
+        // Load campaign details
+        async function loadCampaignDetails(campaignId) {
+            try {
+                const response = await fetch(`/api/campaign/${campaignId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    campaignData = data.campaign;
+                    renderCampaignDetails();
+                    createCharts();
+                } else {
+                    showError('Campaign not found');
+                }
+            } catch (error) {
+                console.error('Error loading campaign details:', error);
+                showError('Failed to load campaign details');
+            }
+        }
+
+        // Load campaign replies
+        async function loadCampaignReplies(campaignId) {
+            try {
+                document.getElementById('repliesLoading').style.display = 'block';
+                
+                const response = await fetch(`/api/campaign/${campaignId}/replies`);
+                const data = await response.json();
+                
+                document.getElementById('repliesLoading').style.display = 'none';
+                
+                if (data.success) {
+                    repliesData = data;
+                    updateReplyCounts();
+                    renderReplies(currentTab);
+                } else {
+                    showEmptyReplies();
+                }
+            } catch (error) {
+                console.error('Error loading replies:', error);
+                document.getElementById('repliesLoading').style.display = 'none';
+                showEmptyReplies();
+            }
+        }
+
+        // Render campaign details
+        function renderCampaignDetails() {
+            document.getElementById('campaignTitle').textContent = campaignData.name || 'Unnamed Campaign';
+            document.getElementById('campaignSubtitle').textContent = `Created ${campaignData.formatted_created_at || 'N/A'}`;
+            
+            const status = campaignData.status ? campaignData.status.toLowerCase() : 'draft';
+            const statusElement = document.getElementById('campaignStatus');
+            statusElement.textContent = status;
+            statusElement.className = `campaign-status status-${status}`;
+
+            // Update metrics
+            document.getElementById('totalContacted').textContent = campaignData.total_leads_contacted || 0;
+            document.getElementById('totalLeads').textContent = campaignData.interested || 0;
+            document.getElementById('replyRate').textContent = `${campaignData.reply_rate || 0}%`;
+            document.getElementById('positiveRate').textContent = `${campaignData.positive_rate || 0}%`;
+            document.getElementById('emailsSent').textContent = campaignData.emails_sent || 0;
+            document.getElementById('totalReplies').textContent = campaignData.unique_replies || 0;
+
+            // Show content
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('campaignContent').style.display = 'block';
+        }
+
+        // Update reply counts
+        function updateReplyCounts() {
+            document.getElementById('positiveCount').textContent = repliesData.positive_count || 0;
+            document.getElementById('allCount').textContent = repliesData.total_replies || 0;
+        }
+
+        // Switch tabs
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Update tab buttons
+            document.querySelectorAll('.replies-tab').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tab + 'Tab').classList.add('active');
+            
+            // Render replies
+            renderReplies(tab);
+        }
+
+        // Render replies
+        function renderReplies(tab) {
+            const container = document.getElementById('repliesContainer');
+            
+            if (!repliesData) {
+                showEmptyReplies();
+                return;
+            }
+
+            const replies = tab === 'positive' ? repliesData.positive_replies : repliesData.all_replies;
+            
+            if (replies.length === 0) {
+                showEmptyReplies();
+                return;
+            }
+
+            document.getElementById('emptyReplies').style.display = 'none';
+            container.innerHTML = replies.map(reply => createReplyCard(reply)).join('');
+        }
+
+        // Extract only the latest message from email thread
+        function extractLatestMessage(content) {
+            if (!content) return 'No content available';
+            
+            // Common patterns that indicate start of quoted/previous messages
+            const patterns = [
+                /wrote:[\s]*>/im,           // "wrote: >"
+                /wrote:[\s]*\n/im,          // "wrote:" followed by newline
+                /On .* wrote:/im,           // "On [date] ... wrote:"
+                /From:.*\n.*Sent:/im,       // Outlook-style quoted message
+                /-----Original Message-----/i, // Outlook original message
+                /________________________________/,  // Divider line
+                /^>+\s/m                    // Lines starting with > (quoted)
+            ];
+            
+            let latestMessage = content;
+            
+            // Try each pattern and keep the shortest result (most aggressive split)
+            for (const pattern of patterns) {
+                const match = content.match(pattern);
+                if (match && match.index > 0) {
+                    const beforeQuote = content.substring(0, match.index).trim();
+                    // Only use this split if it results in a shorter message
+                    if (beforeQuote.length > 0 && beforeQuote.length < latestMessage.length) {
+                        latestMessage = beforeQuote;
+                    }
+                }
+            }
+            
+            // Clean up the message
+            latestMessage = latestMessage.trim();
+            
+            // Remove excessive line breaks
+            latestMessage = latestMessage.replace(/\n{3,}/g, '\n\n');
+            
+            // If the message is empty after cleaning, return original content
+            if (latestMessage.length === 0) {
+                return content;
+            }
+            
+            return latestMessage;
+        }
+
+        // Create reply card
+        function createReplyCard(reply) {
+            // Extract initials from lead_name or use email
+            const leadName = reply.lead_name || reply.lead_email || 'Unknown';
+            const initials = leadName.split(' ').map(n => n.charAt(0)).join('').toUpperCase().substring(0, 2);
+            const statusClass = reply.interested ? 'status-interested' : 'status-replied';
+            const statusText = reply.interested ? 'Interested' : 'Replied';
+            // Generate inbox URL using the reply UUID
+            const replyUuid = reply.reply_uuid || '';
+            const leadId = reply.lead_id || '';
+            
+            let inboxUrl = '';
+            if (replyUuid && replyUuid.trim() !== '') {
+                // Use the proper UUID from database (stored from API 'uuid' field)
+                inboxUrl = `https://send.longrun.agency/inbox?reply_uuid=${replyUuid}`;
+            } else if (leadId) {
+                // Fallback: use lead_id
+                inboxUrl = `https://send.longrun.agency/inbox?lead_id=${leadId}`;
+            } else {
+                // Final fallback: general inbox
+                inboxUrl = `https://send.longrun.agency/inbox`;
+            }
+            
+            // Extract only the latest message from the reply
+            const latestMessage = extractLatestMessage(reply.content);
+            
+            return `
+                <div class="reply-card">
+                    <div class="reply-header">
+                        <div class="reply-contact">
+                            <div class="reply-avatar">${initials}</div>
+                            <div class="reply-info">
+                                <h6>${leadName}</h6>
+                                <small>${reply.lead_email || 'No email'}</small>
+                            </div>
+                        </div>
+                        <div class="reply-actions">
+                            <span class="status-badge ${statusClass}">${statusText}</span>
+                            <a href="${inboxUrl}" target="_blank" class="reply-action-btn" title="View in EmailBison">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="reply-subject">${reply.subject || 'No Subject'}</div>
+                    <div class="reply-content">${latestMessage}</div>
+                    <div class="reply-date">
+                        <i class="fas fa-clock"></i>
+                        ${new Date(reply.date_received).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                        })}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Create charts
+        function createCharts() {
+            createPerformanceChart();
+            createTimelineChart();
+        }
+
+        // Performance chart
+        function createPerformanceChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            
+            performanceChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Contacted', 'Replied', 'Interested'],
+                    datasets: [{
+                        data: [
+                            campaignData.total_leads_contacted || 0,
+                            campaignData.unique_replies || 0,
+                            campaignData.interested || 0
+                        ],
+                        backgroundColor: [
+                            'rgba(255, 107, 53, 0.8)',
+                            'rgba(139, 69, 19, 0.8)',
+                            'rgba(16, 185, 129, 0.8)'
+                        ],
+                        borderColor: [
+                            '#ff6b35',
+                            '#8b4513',
+                            '#10b981'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Timeline chart
+        function createTimelineChart() {
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            
+            // Simple timeline data (you can enhance this with real timeline data)
+            timelineChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                    datasets: [{
+                        label: 'Replies',
+                        data: [5, 12, 8, 15], // Placeholder data
+                        borderColor: '#ff6b35',
+                        backgroundColor: 'rgba(255, 107, 53, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Show empty replies
+        function showEmptyReplies() {
+            document.getElementById('emptyReplies').style.display = 'block';
+            document.getElementById('repliesContainer').innerHTML = '';
+        }
+
+        // Show error
+        function showError(message) {
+            document.getElementById('loadingState').innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h4>Error</h4>
+                    <p>${message}</p>
+                    <a href="/campaigns" class="btn btn-primary">Back to Campaigns</a>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

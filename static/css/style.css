@@ -1,0 +1,251 @@
+/* Custom Styles for LeadGen Analytics Dashboard */
+
+:root {
+    /* Brand Colors from Prime Exits UI Kit */
+    --primary-black: #000000;
+    --primary-white: #ffffff;
+    --light-gray: #f5f5f5;
+    --medium-gray: #6c757d;
+    --bright-orange: #ff6b35;
+    --dark-brown: #8b4513;
+    --dark-red: #8b0000;
+    --bright-red: #dc2626;
+    
+    /* UI Element Colors */
+    --primary-color: var(--bright-orange);
+    --success-color: var(--dark-brown);
+    --info-color: var(--medium-gray);
+    --warning-color: var(--bright-red);
+    --danger-color: var(--dark-red);
+    --light-bg: var(--light-gray);
+    --text-primary: var(--primary-black);
+    --text-secondary: var(--medium-gray);
+    --border-color: #e9ecef;
+}
+
+body {
+    background-color: var(--primary-white);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Metric Cards */
+.metric-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    height: 100%;
+}
+
+.metric-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+.metric-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+}
+
+.metric-icon.bg-primary {
+    background: linear-gradient(135deg, var(--bright-orange) 0%, #ff8c42 100%);
+}
+
+.metric-icon.bg-success {
+    background: linear-gradient(135deg, var(--dark-brown) 0%, #a0522d 100%);
+}
+
+.metric-icon.bg-info {
+    background: linear-gradient(135deg, var(--medium-gray) 0%, #495057 100%);
+}
+
+.metric-icon.bg-warning {
+    background: linear-gradient(135deg, var(--bright-red) 0%, #ef4444 100%);
+}
+
+/* Chart Cards */
+.card {
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 1.25rem;
+    background-color: var(--primary-white);
+}
+
+/* Navbar */
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background: linear-gradient(135deg, var(--primary-black) 0%, #1a1a1a 100%) !important;
+}
+
+.navbar-brand {
+    font-weight: 600;
+    font-size: 1.25rem;
+    color: var(--primary-white) !important;
+}
+
+.navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.8) !important;
+    transition: color 0.3s ease;
+}
+
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link.active {
+    color: var(--bright-orange) !important;
+}
+
+/* Table Styles */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+    cursor: pointer;
+}
+
+/* Badge Styles */
+.badge {
+    padding: 0.35em 0.65em;
+    font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .metric-card {
+        margin-bottom: 1rem;
+    }
+    
+    h1.h3 {
+        font-size: 1.5rem;
+    }
+}
+
+/* Loading Animation */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.25em 0.6em;
+    font-size: 0.875em;
+    font-weight: 500;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+}
+
+.status-new {
+    background-color: #cfe2ff;
+    color: #084298;
+}
+
+.status-contacted {
+    background-color: #cff4fc;
+    color: #055160;
+}
+
+.status-engaged {
+    background-color: #e7d4f5;
+    color: #6f42c1;
+}
+
+.status-responded {
+    background-color: #fff3cd;
+    color: #997404;
+}
+
+.status-interested {
+    background-color: #d1e7dd;
+    color: #0f5132;
+    font-weight: 600;
+}
+
+.status-qualified {
+    background-color: #d1e7dd;
+    color: #0f5132;
+}
+
+.status-converted {
+    background-color: #d1e7dd;
+    color: #0f5132;
+    font-weight: 600;
+}
+
+/* Chart Container */
+canvas {
+    max-height: 400px;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.loading-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.loading-spinner {
+    text-align: center;
+}
+
+/* Spinner Animation */
+.spinner {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto 20px;
+    border: 4px solid var(--light-gray);
+    border-top: 4px solid var(--bright-orange);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    color: var(--bright-orange);
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0;
+    animation: fade 1.5s ease-in-out infinite;
+}
+
+@keyframes fade {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+

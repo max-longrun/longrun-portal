@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Generation Analytics Dashboard</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Custom Brand Colors Override -->
+    <style>
+        .btn-primary {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .btn-primary:hover {
+            background-color: #e55a2b;
+            border-color: #e55a2b;
+        }
+        .btn-outline-primary {
+            color: var(--bright-orange);
+            border-color: var(--bright-orange);
+        }
+        .btn-outline-primary:hover {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .btn-outline-primary.active {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .text-muted {
+            color: var(--text-secondary) !important;
+        }
+        .navbar-toggler {
+            border-color: var(--bright-orange);
+        }
+        .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 107, 53, 1%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='m4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+    </style>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Leaflet.js for Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Map Styles -->
+    <style>
+        #leadsLocationMap {
+            height: 450px;
+            width: 100%;
+            border-radius: 8px;
+        }
+        
+        .leaflet-tooltip {
+            background-color: white;
+            border: 2px solid #1f2937;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 8px 12px;
+        }
+        
+        .state-tooltip {
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-chart-line me-2"></i>LeadGen Analytics
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-users me-1"></i>Leads</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/campaigns"><i class="fas fa-envelope me-1"></i>Campaigns</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-cog me-1"></i>Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p class="loading-text">Loading data...</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container-fluid mt-4">
+        <!-- Page Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                    <div>
+                        <h1 class="h3"><i class="fas fa-tachometer-alt me-2"></i>Dashboard Overview</h1>
+                        <p class="text-muted mb-0">Real-time analytics for your lead generation campaigns</p>
+                    </div>
+                    
+                    <!-- Time Frame Filter -->
+                    <div class="btn-group mt-3 mt-md-0" role="group" aria-label="Time frame filter">
+                        <button type="button" class="btn btn-outline-primary" data-timeframe="7d">Last 7 Days</button>
+                        <button type="button" class="btn btn-outline-primary" data-timeframe="mtd">Month to Date</button>
+                        <button type="button" class="btn btn-outline-primary" data-timeframe="lm">Last Month</button>
+                        <button type="button" class="btn btn-outline-primary active" data-timeframe="all">All Time</button>
+                        <button type="button" class="btn btn-outline-primary" data-timeframe="custom" id="customRangeBtn">
+                            <i class="fas fa-calendar-alt"></i> Custom
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Custom Date Range Picker (Hidden by default) -->
+        <div class="row mb-3 d-none" id="customDateRange">
+            <div class="col-12">
+                <div class="card border-primary">
+                    <div class="card-body">
+                        <div class="row align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="startDate">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">End Date</label>
+                                <input type="date" class="form-control" id="endDate">
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-primary w-100" id="applyCustomRange">
+                                    <i class="fas fa-check"></i> Apply
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Metrics Cards -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card metric-card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-1 small text-uppercase">Number of Leads</p>
+                                <h2 class="mb-2" id="total-leads">-</h2>
+                            </div>
+                            <div class="metric-icon bg-primary">
+                                <i class="fas fa-star"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card metric-card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-1 small text-uppercase">Reply Rate</p>
+                                <h2 class="mb-2"><span id="reply-rate">-</span>%</h2>
+                                <small class="text-muted"><span id="reply-count">-</span> unique replies</small>
+                            </div>
+                            <div class="metric-icon bg-success">
+                                <i class="fas fa-reply-all"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card metric-card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-1 small text-uppercase">Positive Rate</p>
+                                <h2 class="mb-2"><span id="positive-rate">-</span>%</h2>
+                            </div>
+                            <div class="metric-icon bg-warning">
+                                <i class="fas fa-thumbs-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card metric-card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-1 small text-uppercase">Prospects Contacted</p>
+                                <h2 class="mb-2" id="prospects-contacted">-</h2>
+                                <small class="text-muted"><span id="emails-sent">-</span> emails sent</small>
+                            </div>
+                            <div class="metric-icon bg-info">
+                                <i class="fas fa-envelope"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 1: Replies Over Time -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Replies Over Time</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="repliesTimeChart" height="80"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 2: Campaign Breakdown + Reply Status Breakdown -->
+        <div class="row mb-4">
+            <div class="col-lg-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Campaign Breakdown</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="campaignBreakdownChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Reply Status Breakdown</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="replyStatusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 3: US States Lead Activity + Campaign Performance -->
+        <div class="row mb-4">
+            <div class="col-lg-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <div>
+                            <h5 class="mb-0"><i class="fas fa-map-marked-alt me-2"></i>US States Lead Activity</h5>
+                            <small class="text-muted">Hover over states to see replied and interested counts</small>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="leadsLocationMap"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Campaign Performance</h5>
+                        <small class="text-muted">Positive Rate (Positive Replies / Contacted)</small>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="campaignPerformanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pipeline Value Calculator -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%);">
+                    <div class="card-body p-4">
+                        <div class="text-center mb-4">
+                            <h3 class="text-white mb-2">
+                                <i class="fas fa-calculator me-2"></i>Your Pipeline Potential
+                            </h3>
+                            <p class="text-white-50 mb-0">Calculate your potential revenue based on interested leads</p>
+                        </div>
+                        
+                        <div class="row g-3 align-items-stretch">
+                            <!-- Active Leads -->
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 shadow-sm">
+                                    <div class="card-body text-center p-4">
+                                        <small class="text-muted d-block mb-2">Interested Leads</small>
+                                        <h2 class="mb-0" style="color: #60a5fa;" id="pipeline-leads">0</h2>
+                                        <small class="text-muted">in selected timeframe</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Average Deal Value (Editable) -->
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 shadow-sm" style="background: linear-gradient(135deg, #ff6b35 0%, #ff8c5f 100%);">
+                                    <div class="card-body text-center p-4">
+                                        <small class="text-white d-block mb-2">Average Deal Value</small>
+                                        <div class="input-group input-group-lg mb-2">
+                                            <span class="input-group-text bg-white border-0 fw-bold" style="font-size: 1.5rem;">$</span>
+                                            <input type="number" 
+                                                   class="form-control form-control-lg border-0 text-center fw-bold" 
+                                                   id="avg-deal-value" 
+                                                   value="5000" 
+                                                   min="0" 
+                                                   step="100"
+                                                   style="font-size: 1.5rem;">
+                                        </div>
+                                        <small class="text-white">per closed deal</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Total Potential (Calculated) -->
+                            <div class="col-md-4">
+                                <div class="card h-100 border-0 shadow-sm" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
+                                    <div class="card-body text-center p-4">
+                                        <small class="text-white d-block mb-2">Total Pipeline Value</small>
+                                        <h2 class="mb-0 text-white" id="pipeline-total">$0</h2>
+                                        <small class="text-white">potential revenue</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center mt-3">
+                            <small class="text-white-50">
+                                <i class="fas fa-info-circle me-1"></i>
+                                This calculation helps you estimate potential revenue from your interested leads
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Recent Replies</h5>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary active" id="activity-all-tab">
+                                All
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="activity-positive-tab">
+                                Positive
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Lead Name</th>
+                                        <th>Email</th>
+                                        <th>Campaign</th>
+                                        <th>Status</th>
+                                        <th>Date & Time</th>
+                                        <th class="text-center">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activity-table">
+                                    <!-- Will be populated by JavaScript -->
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">
+                                            <i class="fas fa-spinner fa-spin me-2"></i>Loading replies...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
+
