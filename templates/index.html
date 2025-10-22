@@ -66,9 +66,71 @@
     <!-- Map Styles -->
     <style>
         #leadsLocationMap {
-            height: 450px;
+            height: 500px;
             width: 100%;
             border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Custom marker styles */
+        .custom-marker {
+            background: transparent;
+            border: none;
+        }
+        
+        .marker-pin {
+            width: 20px;
+            height: 20px;
+            background: #ff6b35;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .marker-pin::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid #ff6b35;
+        }
+        
+        /* Lead popup styles */
+        .lead-popup .leaflet-popup-content-wrapper {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .lead-popup-content {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .lead-header h6 {
+            color: #1f2937;
+            font-weight: 600;
+        }
+        
+        .lead-details {
+            font-size: 13px;
+        }
+        
+        .detail-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 4px;
+            color: #4b5563;
+        }
+        
+        .detail-row i {
+            color: #ff6b35;
+            width: 16px;
+            text-align: center;
         }
         
         .leaflet-tooltip {
@@ -366,12 +428,16 @@
                 </div>
             </div>
 
-            <div class="col-lg-6 mb-3">
-                <div class="card border-0 shadow-sm h-100">
+        </div>
+
+        <!-- Lead Locations Map -->
+        <div class="row mb-4" style="display: none;">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
                     <div class="card-header bg-white">
                         <div>
-                            <h5 class="mb-0"><i class="fas fa-map-marked-alt me-2"></i>US States Lead Activity</h5>
-                            <small class="text-muted">Hover over states to see replied and interested counts</small>
+                            <h5 class="mb-0"><i class="fas fa-map-marked-alt me-2"></i>Lead Locations Map</h5>
+                            <small class="text-muted">Click on markers to see lead details</small>
                         </div>
                     </div>
                     <div class="card-body p-0">

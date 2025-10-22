@@ -8,6 +8,46 @@ import json
 import os
 from contextlib import contextmanager
 
+# Import the improved address extraction function
+try:
+    from app import extract_address_from_custom_variables
+except ImportError:
+    # Fallback if app.py is not available
+    def extract_address_from_custom_variables(custom_vars):
+        """Fallback address extraction"""
+        if not isinstance(custom_vars, list):
+            return None, None, None, None
+        
+        address = None
+        city = None
+        state = None
+        zip_code = None
+        
+        for var in custom_vars:
+            var_name = var.get('name', '') or ''
+            var_value = var.get('value', '') or ''
+            
+            # Skip if name or value is None
+            if not var_name or not var_value:
+                continue
+                
+            var_name = var_name.lower().strip()
+            var_value = var_value.strip()
+            
+            if not var_value or var_value == 'None':
+                continue
+            
+            if 'street' in var_name or 'address' in var_name:
+                address = var_value
+            elif 'city' in var_name or 'town' in var_name:
+                city = var_value
+            elif 'state' in var_name or 'province' in var_name:
+                state = var_value
+            elif 'zip' in var_name or 'postal' in var_name:
+                zip_code = var_value
+        
+        return address, city, state, zip_code
+
 # EmailBison API configuration
 EMAILBISON_DOMAIN = os.environ.get('EMAILBISON_DOMAIN', 'https://send.longrun.agency')
 EMAILBISON_API_KEY = os.environ.get('EMAILBISON_API_KEY', '5|LJwTR33haOeU6bSlBGU08roquoklOlZg3CsNgEMtdd040014')
@@ -91,12 +131,31 @@ class SupabaseManager:
                     company TEXT,
                     phone TEXT,
                     state TEXT,
+                    address TEXT,
+                    city TEXT,
+                    zip_code TEXT,
+                    latitude DECIMAL(10, 8),
+                    longitude DECIMAL(11, 8),
+                    geocoded_address TEXT,
+                    geocoded_at TIMESTAMP,
                     interested BOOLEAN DEFAULT false,
                     created_at TEXT,
                     updated_at TEXT,
                     last_synced TIMESTAMP DEFAULT NOW()
                 )
             ''')
+            
+            # Add address and geocoding fields if they don't exist (for existing databases)
+            try:
+                cursor.execute('ALTER TABLE leads ADD COLUMN IF NOT EXISTS address TEXT')
+                cursor.execute('ALTER TABLE leads ADD COLUMN IF NOT EXISTS city TEXT')
+                cursor.execute('ALTER TABLE leads ADD COLUMN IF NOT EXISTS zip_code TEXT')
+                cursor.execute('ALTER TABLE leads ADD COLUMN IF NOT EXISTS latitude DECIMAL(10, 8)')
+                cursor.execute('ALTER TABLE leads ADD COLUMN IF NOT EXISTS longitude DECIMAL(11, 8)')
+                cursor.execute('ALTER TABLE leads ADD COLUMN IF NOT EXISTS geocoded_address TEXT')
+                cursor.execute('ALTER TABLE leads ADD COLUMN IF NOT EXISTS geocoded_at TIMESTAMP')
+            except Exception as e:
+                print(f"Note: Address/geocoding columns may already exist: {e}")
             
             # Replies table
             cursor.execute('''
@@ -270,16 +329,20 @@ class DataSyncManager:
             )
             
             # Sync campaigns
-            print("\n📊 Syncing campaigns...")
+            print("\nSyncing campaigns...")
             self._sync_campaigns()
             
             # Sync leads
-            print("\n👥 Syncing leads...")
+            print("\nSyncing leads...")
             self._sync_leads()
             
             # Sync replies for all campaigns
-            print("\n💬 Syncing replies...")
+            print("\nSyncing replies...")
             self._sync_replies()
+            
+            # Background geocoding for leads without coordinates
+            print("\nBackground geocoding...")
+            self._background_geocoding()
             
             # Update sync status
             db_manager.execute_query(
@@ -421,19 +484,26 @@ class DataSyncManager:
                 is_interested = True
                 break
         
-        # Extract state from custom_variables
-        state = None
+        # Extract address fields using improved flexible extraction
         custom_vars = lead.get('custom_variables', [])
-        if isinstance(custom_vars, list):
-            for var in custom_vars:
-                if var.get('name') == 'state':
-                    state = var.get('value', '')
-                    break
+        address, city, state, zip_code = extract_address_from_custom_variables(custom_vars)
+        
+        # If we don't have complete address, try to extract from other fields
+        if not address or not city or not state or not zip_code:
+            # Try to get address from other lead fields
+            if not address:
+                address = lead.get('address', '') or ''
+            if not city:
+                city = lead.get('city', '') or ''
+            if not state:
+                state = lead.get('state', '') or ''
+            if not zip_code:
+                zip_code = lead.get('zip_code', '') or lead.get('postal_code', '') or ''
         
         db_manager.execute_query('''
             INSERT INTO leads (id, email, first_name, last_name, title, company, phone, 
-                             state, interested, created_at, updated_at, last_synced)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                             state, address, city, zip_code, interested, created_at, updated_at, last_synced)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (id) DO UPDATE SET
                 email = EXCLUDED.email,
                 first_name = EXCLUDED.first_name,
@@ -442,6 +512,9 @@ class DataSyncManager:
                 company = EXCLUDED.company,
                 phone = EXCLUDED.phone,
                 state = EXCLUDED.state,
+                address = EXCLUDED.address,
+                city = EXCLUDED.city,
+                zip_code = EXCLUDED.zip_code,
                 interested = EXCLUDED.interested,
                 updated_at = EXCLUDED.updated_at,
                 last_synced = NOW()
@@ -454,6 +527,9 @@ class DataSyncManager:
             lead.get('company', ''),
             lead.get('phone', ''),
             state,
+            address,
+            city,
+            zip_code,
             is_interested,
             lead.get('created_at', ''),
             lead.get('updated_at', '')
@@ -491,7 +567,7 @@ class DataSyncManager:
                             lead_id = reply.get('lead_id')
                             reply_uuid = reply.get('uuid', '') or reply.get('reply_uuid', '')
                             
-                            if not reply_uuid or reply_uuid.strip() == '':
+                            if not reply_uuid or str(reply_uuid).strip() == '':
                                 continue
                             
                             content = reply.get('text_body', '') or reply.get('html_body', '') or reply.get('content', '')
@@ -535,6 +611,115 @@ class DataSyncManager:
         except Exception as e:
             print(f"   Error syncing replies: {e}")
             raise
+    
+    def _background_geocoding(self):
+        """Background geocoding for leads that don't have coordinates yet"""
+        try:
+            db_manager = get_db_manager()
+            
+            # Get leads that need geocoding (have address info but no coordinates)
+            leads_to_geocode = db_manager.execute_query("""
+                SELECT id, address, city, state, zip_code
+                FROM leads
+                WHERE (latitude IS NULL OR longitude IS NULL)
+                AND (
+                    (address IS NOT NULL AND address != '') OR
+                    (city IS NOT NULL AND city != '') OR
+                    (state IS NOT NULL AND state != '') OR
+                    (zip_code IS NOT NULL AND zip_code != '')
+                )
+                LIMIT 50
+            """)
+            
+            if not leads_to_geocode:
+                print("   No leads need geocoding")
+                return
+            
+            print(f"   Geocoding {len(leads_to_geocode)} leads...")
+            
+            for lead_row in leads_to_geocode:
+                lead_id, address, city, state, zip_code = lead_row
+                
+                # Build address string
+                address_parts = []
+                if address and str(address).strip():
+                    address_parts.append(str(address).strip())
+                if city and str(city).strip():
+                    address_parts.append(str(city).strip())
+                if state and str(state).strip():
+                    address_parts.append(str(state).strip())
+                if zip_code and str(zip_code).strip():
+                    address_parts.append(str(zip_code).strip())
+                
+                full_address = ', '.join(address_parts)
+                
+                if not full_address:
+                    continue
+                
+                # Geocode the address
+                geocoded = self._geocode_address(full_address)
+                
+                if geocoded:
+                    # Update the lead with coordinates
+                    db_manager.execute_query("""
+                        UPDATE leads 
+                        SET latitude = %s, longitude = %s, geocoded_address = %s, geocoded_at = NOW()
+                        WHERE id = %s
+                    """, (
+                        geocoded['lat'],
+                        geocoded['lng'],
+                        geocoded['display_name'],
+                        lead_id
+                    ))
+                    print(f"   Geocoded lead {lead_id}: {full_address}")
+                else:
+                    print(f"   Failed to geocode lead {lead_id}: {full_address}")
+                
+                # Small delay to be respectful to the geocoding service
+                time.sleep(0.5)
+            
+            print(f"   Background geocoding completed")
+            
+        except Exception as e:
+            print(f"   Error in background geocoding: {e}")
+    
+    def _geocode_address(self, address_string):
+        """Geocode an address string to lat/lng coordinates using Nominatim (OpenStreetMap)"""
+        try:
+            if not address_string or not str(address_string).strip():
+                return None
+            
+            # Use Nominatim geocoding service
+            url = "https://nominatim.openstreetmap.org/search"
+            headers = {
+                'User-Agent': 'LongRun Reports App/1.0 (contact@longrun.agency)'
+            }
+            params = {
+                'q': str(address_string).strip(),
+                'format': 'json',
+                'limit': 1,
+                'countrycodes': 'us',  # Limit to US addresses
+                'addressdetails': 1
+            }
+            
+            response = requests.get(url, params=params, headers=headers, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data and len(data) > 0:
+                result = data[0]
+                return {
+                    'lat': float(result['lat']),
+                    'lng': float(result['lon']),
+                    'display_name': result.get('display_name', ''),
+                    'confidence': result.get('importance', 0)
+                }
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error geocoding address '{address_string}': {e}")
+            return None
 
 # Initialize on import
 if __name__ == '__main__':
