@@ -1,5 +1,5 @@
-import psycopg2
-from psycopg2 import pool
+import psycopg
+from psycopg import pool
 import threading
 import time
 from datetime import datetime, timedelta
@@ -37,7 +37,7 @@ class SupabaseManager:
     def init_connection_pool(self):
         """Initialize the connection pool"""
         try:
-            self.connection_pool = psycopg2.pool.ThreadedConnectionPool(
+            self.connection_pool = psycopg.pool.ThreadedConnectionPool(
                 minconn=1,
                 maxconn=10,
                 dsn=self.database_url,
