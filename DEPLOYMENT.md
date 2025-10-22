@@ -97,13 +97,37 @@
 
 ## 🔧 Environment Variables
 
-Required for production:
+Required for production (now using Supabase):
 
 ```bash
+# Supabase Database
+SUPABASE_URL=https://ocoihazbvkyjuexmhpnj.supabase.co
+SUPABASE_KEY=sb_secret_LaBpA-IgbOThrRNoNGPBGQ_EpPhp8K9
+DATABASE_URL=postgresql://postgres.ocoihazbvkyjuexmhpnj:sb_secret_LaBpA-IgbOThrRNoNGPBGQ_EpPhp8K9@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+
+# EmailBison API
 EMAILBISON_API_KEY=5|LJwTR33haOeU6bSlBGU08roquoklOlZg3CsNgEMtdd040014
 EMAILBISON_DOMAIN=https://send.longrun.agency
-SECRET_KEY=longrun_prod_secret_2024
+
+# Flask
 FLASK_ENV=production
+SECRET_KEY=longrun_prod_secret_2024
+```
+
+### ⚡ Database Migration
+
+**This application now uses Supabase (PostgreSQL) instead of SQLite.**
+
+Benefits:
+- ✅ Better for production deployment
+- ✅ Handles multiple concurrent users
+- ✅ Automatic backups
+- ✅ Better performance for large datasets
+- ✅ No file-based database issues
+
+To migrate your existing SQLite data to Supabase:
+```bash
+python migrate_to_supabase.py
 ```
 
 ## 📊 Performance Optimization
@@ -186,4 +210,5 @@ For issues with:
 ---
 
 **Ready to deploy! 🚀**
+
 

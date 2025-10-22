@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import random
 import requests
 from collections import Counter
-from sqlite_manager import get_db_manager, get_sync_manager
+from supabase_manager_postgres_backup import get_db_manager, get_sync_manager
 
 app = Flask(__name__)
 
@@ -142,8 +142,8 @@ def get_campaign_replies(campaign_id):
                    l.first_name, l.last_name, l.email, l.title, l.company
             FROM replies r
             LEFT JOIN leads l ON r.lead_id = l.id
-            WHERE r.campaign_id = ?
-            AND r.automated_reply = 0
+            WHERE r.campaign_id = %s
+            AND r.automated_reply = false
             ORDER BY r.date_received DESC
         """, (campaign_id,))
         
@@ -212,7 +212,7 @@ def get_recent_activity():
             FROM replies r
             LEFT JOIN leads l ON r.lead_id = l.id
             LEFT JOIN campaigns c ON r.campaign_id = c.id
-            WHERE r.automated_reply = 0
+            WHERE r.automated_reply = false
             ORDER BY r.date_received DESC
             LIMIT 20
         """)
@@ -254,7 +254,7 @@ def get_recent_activity():
             FROM replies r
             LEFT JOIN leads l ON r.lead_id = l.id
             LEFT JOIN campaigns c ON r.campaign_id = c.id
-            WHERE r.automated_reply = 0 AND r.interested = 1
+            WHERE r.automated_reply = false AND r.interested = true
             ORDER BY r.date_received DESC
             LIMIT 10
         """)
@@ -348,6 +348,73 @@ def get_dashboard_data():
             'timeframe_label': 'Last 7 Days'
         }
         return jsonify(data)
+
+@app.route('/api/custom-timeframe-data')
+def get_custom_timeframe_data():
+    """
+    API endpoint specifically for custom timeframe with enhanced loading and error handling
+    """
+    try:
+        from flask import request
+        
+        # Get custom date parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            return jsonify({
+                'success': False,
+                'error': 'Start date and end date are required'
+            })
+        
+        # Calculate date range
+        date_range = calculate_date_range('custom', start_date, end_date)
+        
+        print(f"Processing custom timeframe: {date_range['label']}")
+        
+        # Fetch data from database
+        leads_data = fetch_leads_from_db()
+        campaigns_data = fetch_campaigns_from_db()
+        
+        # Process the data with time filtering
+        metrics = calculate_metrics_from_db(leads_data, campaigns_data, date_range)
+        chart_data = generate_chart_data_from_db(leads_data, campaigns_data, date_range)
+        
+        data = {
+            'success': True,
+            'metrics': metrics,
+            'chart_data': chart_data,
+            'timeframe_label': date_range['label']
+        }
+        return jsonify(data)
+        
+    except Exception as e:
+        print(f"Error fetching custom timeframe data: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'metrics': {
+                'total_leads': 0,
+                'reply_rate': 0,
+                'reply_count': 0,
+                'positive_rate': 0,
+                'prospects_contacted': 0,
+                'emails_sent': 0
+            },
+            'chart_data': {
+                'replies_over_time': {'labels': [], 'all_values': [], 'positive_values': []},
+                'campaign_breakdown': {'labels': [], 'values': []},
+                'reply_status': {'labels': [], 'values': []},
+                'leads_by_title': {'labels': [], 'values': []},
+                'leads_by_location': {'labels': [], 'values': []},
+                'campaign_performance': {'labels': [], 'rates': [], 'positive_counts': [], 'contacted_counts': []},
+                'map_locations': []
+            },
+            'timeframe_label': 'Custom Range'
+        })
 
 def format_date(date_string):
     """Format date string to readable format"""
@@ -503,42 +570,57 @@ def calculate_metrics_from_db(leads_data, campaigns_data, date_range):
     total_prospects_contacted = 0
     total_emails_sent = 0
     
-    # For All Time, use campaign totals directly
+    db_manager = get_db_manager()
+    
+    # For All Time, calculate from database with actual date range
     if date_range['label'] == 'All Time':
-        for campaign in campaigns_list:
-            total_interested += campaign.get('interested', 0)
-            total_unique_replies += int(campaign.get('unique_replies', 0))
-            total_prospects_contacted += campaign.get('total_leads_contacted', 0)
-            total_emails_sent += campaign.get('emails_sent', 0)
+        # Try to get workspace stats from API first
+        workspace_stats = fetch_workspace_stats_from_api(start_date, end_date)
+        if workspace_stats:
+            total_unique_replies = workspace_stats.get('unique_replies_per_contact', 0)
+            total_interested = workspace_stats.get('interested', 0)
+            total_prospects_contacted = workspace_stats.get('total_leads_contacted', 0)
+            total_emails_sent = workspace_stats.get('emails_sent', 0)
+        else:
+            # Fallback to database calculation
+            _, _, total_unique_replies, total_interested = calculate_metrics_from_replies(db_manager, start_date, end_date)
+            # Calculate contacted prospects from campaign data
+            for campaign in campaigns_list:
+                total_prospects_contacted += campaign.get('total_leads_contacted', 0)
+                total_emails_sent += campaign.get('emails_sent', 0)
     else:
-        # For specific date ranges, calculate from replies
-        db_manager = get_db_manager()
-        replies = db_manager.execute_query("""
-            SELECT DISTINCT r.lead_id, r.interested, r.campaign_id
-            FROM replies r
-            WHERE DATE(SUBSTR(r.date_received, 1, 10)) BETWEEN ? AND ?
-            AND r.automated_reply = 0
-        """, (start_date.isoformat(), end_date.isoformat()))
-        
-        unique_leads = set()
-        interested_leads = set()
-        
-        for reply in replies:
-            lead_id = reply[0]
-            is_interested = reply[1]
-            campaign_id = reply[2]
-            
-            unique_leads.add(lead_id)
-            if is_interested:
-                interested_leads.add(lead_id)
-        
-        total_unique_replies = len(unique_leads)
-        total_interested = len(interested_leads)
-        
-        # Get contacted prospects and emails sent from campaigns
-        for campaign in campaigns_list:
-            total_prospects_contacted += campaign.get('total_leads_contacted', 0)
-            total_emails_sent += campaign.get('emails_sent', 0)
+        # For specific date ranges, try to get workspace stats from API first
+        workspace_stats = fetch_workspace_stats_from_api(start_date, end_date)
+        if workspace_stats:
+            total_unique_replies = workspace_stats.get('unique_replies_per_contact', 0)
+            total_interested = workspace_stats.get('interested', 0)
+            total_prospects_contacted = workspace_stats.get('total_leads_contacted', 0)
+            total_emails_sent = workspace_stats.get('emails_sent', 0)
+        else:
+            # Fallback to individual campaign API calls
+            try:
+                # Try to fetch real-time data from EmailBison API for the date range
+                real_data = fetch_realtime_metrics_from_api(start_date, end_date)
+                if real_data:
+                    total_prospects_contacted = real_data.get('prospects_contacted', 0)
+                    total_emails_sent = real_data.get('emails_sent', 0)
+                    # Still calculate replies from database even when using real-time data
+                    _, _, total_unique_replies, total_interested = calculate_metrics_from_replies(db_manager, start_date, end_date)
+                else:
+                    # Fallback to database calculation - get contacted from campaigns
+                    _, _, total_unique_replies, total_interested = calculate_metrics_from_replies(db_manager, start_date, end_date)
+                    # Calculate contacted prospects from campaign data
+                    for campaign in campaigns_list:
+                        total_prospects_contacted += campaign.get('total_leads_contacted', 0)
+                        total_emails_sent += campaign.get('emails_sent', 0)
+            except Exception as e:
+                print(f"Error fetching real-time data: {e}")
+                # Fallback to database calculation - get contacted from campaigns
+                _, _, total_unique_replies, total_interested = calculate_metrics_from_replies(db_manager, start_date, end_date)
+                # Calculate contacted prospects from campaign data
+                for campaign in campaigns_list:
+                    total_prospects_contacted += campaign.get('total_leads_contacted', 0)
+                    total_emails_sent += campaign.get('emails_sent', 0)
     
     # Calculate rates
     reply_rate = (total_unique_replies / total_prospects_contacted * 100) if total_prospects_contacted > 0 else 0
@@ -553,6 +635,156 @@ def calculate_metrics_from_db(leads_data, campaigns_data, date_range):
         'emails_sent': total_emails_sent
     }
 
+def fetch_workspace_line_chart_from_api(start_date, end_date):
+    """Fetch workspace line chart data from EmailBison API for specific date range"""
+    try:
+        print(f"Fetching workspace line chart data from Bison API for {start_date} to {end_date}")
+        
+        # Use the line chart stats endpoint
+        url = f'{EMAILBISON_DOMAIN}/api/workspaces/v1.1/line-area-chart-stats'
+        params = {
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d')
+        }
+        
+        response = requests.get(url, headers=EMAILBISON_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract the chart data from the response
+        chart_data = data.get('data', [])
+        
+        # Find replies and interested data from the chart data
+        replies_data = []
+        interested_data = []
+        
+        for item in chart_data:
+            label = item.get('label', '')
+            dates = item.get('dates', [])
+            
+            if label == 'Replied':
+                replies_data = dates
+            elif label == 'Interested':
+                interested_data = dates
+        
+        print(f"Line chart data from Bison API: {len(replies_data)} reply days, {len(interested_data)} interested days")
+        
+        return {
+            'replies': replies_data,
+            'interested': interested_data
+        }
+        
+    except Exception as e:
+        print(f"Error fetching workspace line chart data: {e}")
+        return None
+
+def fetch_workspace_stats_from_api(start_date, end_date):
+    """Fetch workspace stats from EmailBison API for specific date range"""
+    try:
+        print(f"Fetching workspace stats from Bison API for {start_date} to {end_date}")
+        
+        # Use the workspace stats endpoint
+        url = f'{EMAILBISON_DOMAIN}/api/workspaces/v1.1/stats'
+        params = {
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d')
+        }
+        
+        response = requests.get(url, headers=EMAILBISON_HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract the stats from the response
+        stats = data.get('data', {})
+        unique_replies_per_contact = stats.get('unique_replies_per_contact', 0)
+        interested = stats.get('interested', 0)
+        total_leads_contacted = stats.get('total_leads_contacted', 0)
+        emails_sent = stats.get('emails_sent', 0)
+        
+        print(f"Workspace stats from Bison API: {unique_replies_per_contact} unique replies, {interested} interested, {total_leads_contacted} contacted, {emails_sent} emails sent")
+        
+        return {
+            'unique_replies_per_contact': unique_replies_per_contact,
+            'interested': interested,
+            'total_leads_contacted': total_leads_contacted,
+            'emails_sent': emails_sent
+        }
+        
+    except Exception as e:
+        print(f"Error fetching workspace stats: {e}")
+        return None
+
+def fetch_realtime_metrics_from_api(start_date, end_date):
+    """Fetch real-time metrics from EmailBison API for specific date range"""
+    try:
+        print(f"Fetching real-time metrics from Bison API for {start_date} to {end_date}")
+        
+        # Get all campaigns from database
+        db_manager = get_db_manager()
+        campaigns = db_manager.execute_query("SELECT id FROM campaigns")
+        campaign_ids = [row[0] for row in campaigns]
+        
+        total_prospects_contacted = 0
+        total_emails_sent = 0
+        
+        # Fetch stats for each campaign in the date range
+        for campaign_id in campaign_ids:
+            try:
+                # Try to fetch campaign stats for the specific date range
+                stats = fetch_campaign_stats_for_period(campaign_id, start_date, end_date)
+                if stats:
+                    total_prospects_contacted += stats.get('total_leads_contacted', 0)
+                    total_emails_sent += stats.get('emails_sent', 0)
+                    print(f"  Campaign {campaign_id}: {stats.get('total_leads_contacted', 0)} contacted, {stats.get('emails_sent', 0)} emails sent")
+            except Exception as e:
+                print(f"  Error fetching stats for campaign {campaign_id}: {e}")
+                continue
+        
+        print(f"Total from Bison API: {total_prospects_contacted} contacted, {total_emails_sent} emails sent")
+        
+        return {
+            'prospects_contacted': total_prospects_contacted,
+            'emails_sent': total_emails_sent,
+            'unique_replies': 0,  # Will be calculated from replies
+            'interested': 0       # Will be calculated from replies
+        }
+        
+    except Exception as e:
+        print(f"Error fetching real-time metrics: {e}")
+        return None
+
+def calculate_metrics_from_replies(db_manager, start_date, end_date):
+    """Calculate metrics from replies data as fallback"""
+    # Get replies data for the timeframe
+    all_replies = db_manager.execute_query("""
+        SELECT lead_id, interested, campaign_id
+        FROM replies 
+        WHERE DATE(LEFT(date_received, 10)) BETWEEN %s AND %s
+        AND automated_reply = false
+    """, (start_date.isoformat(), end_date.isoformat()))
+    
+    unique_leads = set()
+    interested_leads = set()
+    
+    for reply in all_replies:
+        lead_id = reply[0]
+        is_interested = reply[1]
+        campaign_id = reply[2]
+        
+        unique_leads.add(lead_id)
+        if is_interested:
+            interested_leads.add(lead_id)
+    
+    total_unique_replies = len(unique_leads)
+    total_interested = len(interested_leads)
+    
+    # For contacted prospects and emails sent, we need to get this from campaign data
+    # since replies data only shows people who replied, not all contacted
+    total_prospects_contacted = 0  # Will be calculated from campaign data
+    total_emails_sent = len(all_replies) if all_replies else 0  # Total replies received
+    
+    return total_prospects_contacted, total_emails_sent, total_unique_replies, total_interested
+
 def generate_chart_data_from_db(leads_data, campaigns_data, date_range):
     """Generate chart data from database"""
     leads_list = leads_data.get('leads', [])
@@ -563,17 +795,35 @@ def generate_chart_data_from_db(leads_data, campaigns_data, date_range):
         # Get the actual date range from the database
         db_manager = get_db_manager()
         date_range_result = db_manager.execute_query("""
-            SELECT MIN(DATE(SUBSTR(date_received, 1, 10))) as min_date, 
-                   MAX(DATE(SUBSTR(date_received, 1, 10))) as max_date
+            SELECT MIN(DATE(LEFT(date_received, 10))) as min_date, 
+                   MAX(DATE(LEFT(date_received, 10))) as max_date
             FROM replies 
-            WHERE automated_reply = 0
+            WHERE automated_reply = false
         """)
         
-        if date_range_result and date_range_result[0][0]:
-            min_date = datetime.strptime(date_range_result[0][0], '%Y-%m-%d').date()
-            max_date = datetime.strptime(date_range_result[0][1], '%Y-%m-%d').date()
-            start_date = min_date
-            end_date = max_date
+        if date_range_result and len(date_range_result) > 0 and date_range_result[0] and len(date_range_result[0]) > 0 and date_range_result[0][0]:
+            try:
+                # Handle both string and non-string formats
+                min_val = date_range_result[0][0]
+                max_val = date_range_result[0][1] if len(date_range_result[0]) > 1 else min_val
+                
+                if isinstance(min_val, str):
+                    min_date = datetime.strptime(min_val, '%Y-%m-%d').date()
+                else:
+                    min_date = min_val if hasattr(min_val, 'year') else datetime.now().date()
+                
+                if isinstance(max_val, str):
+                    max_date = datetime.strptime(max_val, '%Y-%m-%d').date()
+                else:
+                    max_date = max_val if hasattr(max_val, 'year') else datetime.now().date()
+                
+                start_date = min_date
+                end_date = max_date
+            except:
+                # Fallback to last 90 days if parsing fails
+                from datetime import timedelta
+                start_date = max(date_range['start'], (datetime.now() - timedelta(days=90)).date())
+                end_date = date_range['end']
         else:
             # Fallback to last 90 days if no data
             from datetime import timedelta
@@ -615,24 +865,81 @@ def generate_chart_data_from_db(leads_data, campaigns_data, date_range):
     }
 
 def generate_replies_over_time_from_db(campaigns_list, date_range):
-    """Generate replies over time chart data from database"""
+    """Generate replies over time chart data from EmailBison API"""
     start_date = date_range['start']
     end_date = date_range['end']
+    
+    # Try to get line chart data from EmailBison API first
+    line_chart_data = fetch_workspace_line_chart_from_api(start_date, end_date)
+    if line_chart_data:
+        # Process API data into the expected format
+        replies_data = line_chart_data.get('replies', [])
+        interested_data = line_chart_data.get('interested', [])
+        
+        # Convert API data to date-value dictionaries
+        replies_by_date = {}
+        interested_by_date = {}
+        
+        for reply_entry in replies_data:
+            if len(reply_entry) >= 2:
+                date_str = reply_entry[0]
+                count = reply_entry[1]
+                try:
+                    reply_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    replies_by_date[reply_date] = count
+                except:
+                    pass
+        
+        for interested_entry in interested_data:
+            if len(interested_entry) >= 2:
+                date_str = interested_entry[0]
+                count = interested_entry[1]
+                try:
+                    interested_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    interested_by_date[interested_date] = count
+                except:
+                    pass
+        
+        # Create date buckets for the full range
+        all_replies_counts = {}
+        interested_counts = {}
+        current = start_date
+        while current <= end_date:
+            all_replies_counts[current] = replies_by_date.get(current, 0)
+            interested_counts[current] = interested_by_date.get(current, 0)
+            current += timedelta(days=1)
+        
+        labels = [d.strftime('%b %d') for d in sorted(all_replies_counts.keys())]
+        all_values = [all_replies_counts[d] for d in sorted(all_replies_counts.keys())]
+        positive_values = [interested_counts[d] for d in sorted(interested_counts.keys())]
+        
+        return {
+            'labels': labels,
+            'all_values': all_values,
+            'positive_values': positive_values
+        }
+    
+    # Fallback to database calculation if API fails
+    print("Falling back to database calculation for replies over time")
     
     # Get replies grouped by date
     db_manager = get_db_manager()
     replies = db_manager.execute_query("""
-        SELECT DATE(SUBSTR(date_received, 1, 10)) as reply_date, lead_id, interested
+        SELECT DATE(LEFT(date_received, 10)) as reply_date, lead_id, interested
         FROM replies
-        WHERE DATE(SUBSTR(date_received, 1, 10)) BETWEEN ? AND ?
-        AND automated_reply = 0
+        WHERE DATE(LEFT(date_received, 10)) BETWEEN %s AND %s
+        AND automated_reply = false
         ORDER BY date_received
     """, (start_date.isoformat(), end_date.isoformat()))
     
     # Group by date and deduplicate by lead
     replies_by_date = {}
     for reply in replies:
-        reply_date = datetime.strptime(reply[0], '%Y-%m-%d').date()
+        # Handle both date objects (Postgres) and strings (SQLite)
+        if isinstance(reply[0], str):
+            reply_date = datetime.strptime(reply[0], '%Y-%m-%d').date()
+        else:
+            reply_date = reply[0]  # Already a date object
         lead_id = reply[1]
         is_interested = reply[2]
         
@@ -663,17 +970,18 @@ def generate_replies_over_time_from_db(campaigns_list, date_range):
     }
 
 def generate_campaign_breakdown_from_db(campaigns_list, date_range):
-    """Generate campaign breakdown pie chart from database"""
+    """Generate campaign breakdown pie chart from database - shows only positive replies (leads)"""
     start_date = date_range['start']
     end_date = date_range['end']
     
-    # Get campaign reply counts for the date range
+    # Get campaign positive reply counts for the date range
     db_manager = get_db_manager()
     campaign_replies = db_manager.execute_query("""
         SELECT campaign_id, COUNT(DISTINCT lead_id) as unique_leads
         FROM replies
-        WHERE DATE(SUBSTR(date_received, 1, 10)) BETWEEN ? AND ?
-        AND automated_reply = 0
+        WHERE DATE(LEFT(date_received, 10)) BETWEEN %s AND %s
+        AND automated_reply = false
+        AND interested = true
         GROUP BY campaign_id
     """, (start_date.isoformat(), end_date.isoformat()))
     
@@ -692,7 +1000,7 @@ def generate_campaign_breakdown_from_db(campaigns_list, date_range):
         if unique_leads > 0:
             campaign_data.append((campaign_name, unique_leads))
     
-    # Sort by reply count
+    # Sort by positive lead count
     campaign_data.sort(key=lambda x: x[1], reverse=True)
     
     # Top 5 campaigns + others
@@ -718,10 +1026,10 @@ def generate_reply_status_breakdown_from_db(campaigns_list, date_range):
     stats = db_manager.execute_query("""
         SELECT 
             COUNT(DISTINCT lead_id) as total_replied,
-            COUNT(DISTINCT CASE WHEN interested = 1 THEN lead_id END) as total_interested
+            COUNT(DISTINCT CASE WHEN interested = true THEN lead_id END) as total_interested
         FROM replies
-        WHERE DATE(SUBSTR(date_received, 1, 10)) BETWEEN ? AND ?
-        AND automated_reply = 0
+        WHERE DATE(LEFT(date_received, 10)) BETWEEN %s AND %s
+        AND automated_reply = false
     """, (start_date.isoformat(), end_date.isoformat()))
     
     if stats:
@@ -748,9 +1056,9 @@ def generate_leads_by_title_from_db(leads_list, campaigns_list, date_range):
     interested_leads = db_manager.execute_query("""
         SELECT DISTINCT r.lead_id
         FROM replies r
-        WHERE DATE(r.date_received) BETWEEN ? AND ?
-        AND r.interested = 1
-        AND r.automated_reply = 0
+        WHERE DATE(LEFT(r.date_received, 10)) BETWEEN %s AND %s
+        AND r.interested = true
+        AND r.automated_reply = false
     """, (start_date.isoformat(), end_date.isoformat()))
     
     lead_ids = [lead[0] for lead in interested_leads]
@@ -759,7 +1067,7 @@ def generate_leads_by_title_from_db(leads_list, campaigns_list, date_range):
         return {'labels': [], 'values': []}
     
     # Get titles for these leads
-    placeholders = ','.join(['?' for _ in lead_ids])
+    placeholders = ','.join(['%s' for _ in lead_ids])
     titles = db_manager.execute_query(f"""
         SELECT title, COUNT(*) as count
         FROM leads
@@ -785,9 +1093,9 @@ def generate_leads_by_location_from_db(leads_list, campaigns_list, date_range):
     interested_leads = db_manager.execute_query("""
         SELECT DISTINCT r.lead_id
         FROM replies r
-        WHERE DATE(r.date_received) BETWEEN ? AND ?
-        AND r.interested = 1
-        AND r.automated_reply = 0
+        WHERE DATE(LEFT(r.date_received, 10)) BETWEEN %s AND %s
+        AND r.interested = true
+        AND r.automated_reply = false
     """, (start_date.isoformat(), end_date.isoformat()))
     
     lead_ids = [lead[0] for lead in interested_leads]
@@ -796,7 +1104,7 @@ def generate_leads_by_location_from_db(leads_list, campaigns_list, date_range):
         return {'labels': [], 'values': []}
     
     # Get companies for these leads
-    placeholders = ','.join(['?' for _ in lead_ids])
+    placeholders = ','.join(['%s' for _ in lead_ids])
     companies = db_manager.execute_query(f"""
         SELECT company, COUNT(*) as count
         FROM leads
@@ -830,10 +1138,10 @@ def generate_campaign_performance_from_db(campaigns_list, date_range):
         positive_replies = db_manager.execute_query("""
             SELECT COUNT(*) as positive_count
             FROM replies
-            WHERE campaign_id = ?
-            AND interested = 1
-            AND automated_reply = 0
-            AND DATE(SUBSTR(date_received, 1, 10)) BETWEEN ? AND ?
+            WHERE campaign_id = %s
+            AND interested = true
+            AND automated_reply = false
+            AND DATE(LEFT(date_received, 10)) BETWEEN %s AND %s
         """, (campaign_id, start_date.isoformat(), end_date.isoformat()))
         
         positive_count = positive_replies[0][0] if positive_replies else 0
@@ -898,6 +1206,10 @@ def generate_map_locations_from_db(leads_list, campaigns_list, date_range):
         if not state_str:
             return None
         
+        # Convert to string if it's not already
+        if not isinstance(state_str, str):
+            state_str = str(state_str)
+        
         state_upper = state_str.strip().upper()
         
         # Already a 2-letter code
@@ -918,8 +1230,8 @@ def generate_map_locations_from_db(leads_list, campaigns_list, date_range):
         SELECT l.state, r.interested
         FROM leads l
         INNER JOIN replies r ON l.id = r.lead_id
-        WHERE DATE(SUBSTR(r.date_received, 1, 10)) BETWEEN ? AND ?
-        AND r.automated_reply = 0
+        WHERE DATE(LEFT(r.date_received, 10)) BETWEEN %s AND %s
+        AND r.automated_reply = false
         AND l.state IS NOT NULL
         AND l.state != ''
     """, (start_date.isoformat(), end_date.isoformat()))

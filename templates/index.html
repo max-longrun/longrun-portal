@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lead Generation Analytics Dashboard</title>
     
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
@@ -83,7 +89,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">
-                <i class="fas fa-chart-line me-2"></i>LeadGen Analytics
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="LongRun" height="35">
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -129,9 +135,9 @@
                     <!-- Time Frame Filter -->
                     <div class="btn-group mt-3 mt-md-0" role="group" aria-label="Time frame filter">
                         <button type="button" class="btn btn-outline-primary" data-timeframe="7d">Last 7 Days</button>
-                        <button type="button" class="btn btn-outline-primary" data-timeframe="mtd">Month to Date</button>
+                        <button type="button" class="btn btn-outline-primary active" data-timeframe="mtd">Month to Date</button>
                         <button type="button" class="btn btn-outline-primary" data-timeframe="lm">Last Month</button>
-                        <button type="button" class="btn btn-outline-primary active" data-timeframe="all">All Time</button>
+                        <button type="button" class="btn btn-outline-primary" data-timeframe="all">All Time</button>
                         <button type="button" class="btn btn-outline-primary" data-timeframe="custom" id="customRangeBtn">
                             <i class="fas fa-calendar-alt"></i> Custom
                         </button>
@@ -158,6 +164,11 @@
                                 <button class="btn btn-primary w-100" id="applyCustomRange">
                                     <i class="fas fa-check"></i> Apply
                                 </button>
+                                <div class="mt-2 text-center">
+                                    <small class="text-muted" id="customRangeMessage">
+                                        Custom timeframes may take longer to process
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -90,6 +90,17 @@ body {
     font-weight: 600;
     font-size: 1.25rem;
     color: var(--primary-white) !important;
+    padding: 0.5rem 0;
+}
+
+.navbar-brand img {
+    height: 35px;
+    width: auto;
+    transition: transform 0.3s ease;
+}
+
+.navbar-brand:hover img {
+    transform: scale(1.05);
 }
 
 .navbar-nav .nav-link {

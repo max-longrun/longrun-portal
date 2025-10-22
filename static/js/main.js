@@ -4,7 +4,7 @@
 // Chart instances will be declared in their update functions
 
 // Current time frame
-let currentTimeframe = 'all';
+let currentTimeframe = 'mtd';
 let customStartDate = null;
 let customEndDate = null;
 
@@ -44,7 +44,8 @@ function initializeTimeframeButtons() {
         customEndDate = document.getElementById('endDate').value;
         
         if (customStartDate && customEndDate) {
-            fetchDashboardData();
+            // Use the enhanced custom timeframe function
+            fetchCustomTimeframeData();
         } else {
             alert('Please select both start and end dates');
         }
@@ -81,6 +82,37 @@ async function fetchDashboardData() {
     }
 }
 
+// Fetch custom timeframe data with enhanced loading
+async function fetchCustomTimeframeData() {
+    try {
+        // Show enhanced loading message for custom timeframe
+        showCustomTimeframeLoading();
+        
+        const url = `/api/custom-timeframe-data?start_date=${customStartDate}&end_date=${customEndDate}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            updateMetrics(data.metrics, data.timeframe_label);
+            updateCharts(data.chart_data);
+        } else {
+            console.error('Custom timeframe error:', data.error);
+            showCustomTimeframeError(data.error);
+        }
+        
+        // Hide loading overlay
+        hideCustomTimeframeLoading();
+        
+        // Load activity table separately
+        updateActivityTable();
+        
+    } catch (error) {
+        console.error('Error fetching custom timeframe data:', error);
+        hideCustomTimeframeLoading();
+        showCustomTimeframeError('Failed to fetch data. Please try again.');
+    }
+}
+
 // Show loading overlay
 function showLoading() {
     const overlay = document.getElementById('loadingOverlay');
@@ -95,6 +127,51 @@ function hideLoading() {
     if (overlay) {
         overlay.classList.remove('show');
     }
+}
+
+// Show custom timeframe loading with enhanced message
+function showCustomTimeframeLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    const loadingText = overlay.querySelector('.loading-text');
+    const customMessage = document.getElementById('customRangeMessage');
+    
+    if (overlay) {
+        if (loadingText) {
+            loadingText.textContent = 'This action needs more time - fetching data...';
+        }
+        overlay.classList.add('show');
+    }
+    
+    if (customMessage) {
+        customMessage.textContent = 'Fetching data - this may take a moment...';
+        customMessage.className = 'text-warning';
+    }
+}
+
+// Hide custom timeframe loading
+function hideCustomTimeframeLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    const loadingText = overlay.querySelector('.loading-text');
+    const customMessage = document.getElementById('customRangeMessage');
+    
+    if (overlay) {
+        if (loadingText) {
+            loadingText.textContent = 'Loading data...';
+        }
+        overlay.classList.remove('show');
+    }
+    
+    if (customMessage) {
+        customMessage.textContent = 'Custom timeframes may take longer to process';
+        customMessage.className = 'text-muted';
+    }
+}
+
+// Show custom timeframe error
+function showCustomTimeframeError(errorMessage) {
+    // You could implement a toast notification or alert here
+    console.error('Custom timeframe error:', errorMessage);
+    alert(`Error: ${errorMessage}`);
 }
 
 // Update metric cards
