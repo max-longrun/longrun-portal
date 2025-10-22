@@ -323,12 +323,30 @@ function updateCampaignBreakdownChart(data) {
             maintainAspectRatio: true,
             plugins: {
                 legend: {
-                    position: 'bottom',
+                    display: true,
+                    position: 'right',
                     labels: {
                         padding: 15,
                         usePointStyle: true,
                         font: {
                             size: 11
+                        },
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            if (data.labels.length && data.datasets.length) {
+                                return data.labels.map((label, i) => {
+                                    const value = data.datasets[0].data[i];
+                                    const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return {
+                                        text: `${label}: ${percentage}%`,
+                                        fillStyle: data.datasets[0].backgroundColor[i],
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                            }
+                            return [];
                         }
                     }
                 },

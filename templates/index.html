@@ -245,75 +245,7 @@
             </div>
         </div>
 
-        <!-- Row 1: Replies Over Time -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Replies Over Time</h5>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="repliesTimeChart" height="80"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Row 2: Campaign Breakdown + Reply Status Breakdown -->
-        <div class="row mb-4">
-            <div class="col-lg-6 mb-3">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Campaign Breakdown</h5>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="campaignBreakdownChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6 mb-3">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Reply Status Breakdown</h5>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="replyStatusChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Row 3: US States Lead Activity + Campaign Performance -->
-        <div class="row mb-4">
-            <div class="col-lg-6 mb-3">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-header bg-white">
-                        <div>
-                            <h5 class="mb-0"><i class="fas fa-map-marked-alt me-2"></i>US States Lead Activity</h5>
-                            <small class="text-muted">Hover over states to see replied and interested counts</small>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div id="leadsLocationMap"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-6 mb-3">
-                <div class="card border-0 shadow-sm h-100">
-                    <div class="card-header bg-white">
-                        <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Campaign Performance</h5>
-                        <small class="text-muted">Positive Rate (Positive Replies / Contacted)</small>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="campaignPerformanceChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Pipeline Value Calculator -->
+        <!-- Row 2: Pipeline Value Calculator -->
         <div class="row mb-4">
             <div class="col-12">
                 <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%);">
@@ -375,6 +307,75 @@
                                 This calculation helps you estimate potential revenue from your interested leads
                             </small>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 3: Replies Over Time -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Replies Over Time</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="repliesTimeChart" height="80"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 4: Campaign Breakdown + Campaign Performance -->
+        <div class="row mb-4">
+            <div class="col-lg-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Campaign Breakdown</h5>
+                        <small class="text-muted">Distribution of leads across campaigns</small>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="campaignBreakdownChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Campaign Performance</h5>
+                        <small class="text-muted">Positive Rate (Positive Replies / Contacted)</small>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="campaignPerformanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hidden Charts (Reply Status Breakdown and US States Lead Activity) -->
+        <div class="row mb-4 d-none">
+            <div class="col-lg-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Reply Status Breakdown</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="replyStatusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white">
+                        <div>
+                            <h5 class="mb-0"><i class="fas fa-map-marked-alt me-2"></i>US States Lead Activity</h5>
+                            <small class="text-muted">Hover over states to see replied and interested counts</small>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="leadsLocationMap"></div>
                     </div>
                 </div>
             </div>
