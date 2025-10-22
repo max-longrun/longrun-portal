@@ -663,7 +663,7 @@ async function updateActivityTable() {
     
     try {
         // Show loading state
-        tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading replies...</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading replies...</td></tr>';
         
         const response = await fetch('/api/recent-activity');
         activityData = await response.json();
@@ -672,11 +672,11 @@ async function updateActivityTable() {
             // Render current tab
             renderActivityTable(currentActivityTab);
         } else {
-            tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No recent replies</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No recent replies</td></tr>';
         }
     } catch (error) {
         console.error('Error fetching activity:', error);
-        tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading activity</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error loading activity</td></tr>';
     }
 }
 
@@ -693,7 +693,7 @@ function renderActivityTable(tab) {
     tableBody.innerHTML = '';
     
     if (replies.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No replies found</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No replies found</td></tr>';
         return;
     }
     
@@ -732,6 +732,7 @@ function renderActivityTable(tab) {
             <tr>
                 <td><strong>${reply.lead_name || 'Unknown'}</strong></td>
                 <td>${reply.lead_email}</td>
+                <td>${reply.lead_company || 'N/A'}</td>
                 <td>${reply.campaign_name}</td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td>${formattedDateTime}</td>
