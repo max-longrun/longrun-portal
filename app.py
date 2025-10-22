@@ -311,6 +311,10 @@ def get_dashboard_data():
         # Calculate date range
         date_range = calculate_date_range(timeframe, start_date, end_date)
         
+        # Sync leads from EmailBison API for the selected timeframe
+        print(f"Syncing leads for timeframe: {timeframe}")
+        synced_leads = sync_leads_for_timeframe(timeframe, start_date, end_date)
+        
         # Fetch data from database
         leads_data = fetch_leads_from_db()
         campaigns_data = fetch_campaigns_from_db()
@@ -322,7 +326,8 @@ def get_dashboard_data():
         data = {
             'metrics': metrics,
             'chart_data': chart_data,
-            'timeframe_label': date_range['label']
+            'timeframe_label': date_range['label'],
+            'synced_leads_count': len(synced_leads)
         }
         return jsonify(data)
     except Exception as e:
@@ -345,7 +350,8 @@ def get_dashboard_data():
                 'conversion_funnel': generate_funnel_data(),
                 'lead_sources': generate_source_data()
             },
-            'timeframe_label': 'Last 7 Days'
+            'timeframe_label': 'Last 7 Days',
+            'synced_leads_count': 0
         }
         return jsonify(data)
 
@@ -852,7 +858,7 @@ def generate_chart_data_from_db(leads_data, campaigns_data, date_range):
     campaign_performance = generate_campaign_performance_from_db(campaigns_list, {'start': start_date, 'end': end_date})
     
     # 7. Map Locations Data
-    map_locations = generate_map_locations_from_db(leads_list, campaigns_list, {'start': start_date, 'end': end_date})
+    map_locations = generate_map_locations_from_db(leads_list, campaigns_list, {'start': start_date, 'end': end_date, 'label': date_range['label']})
     
     return {
         'replies_over_time': replies_over_time,
@@ -1003,12 +1009,12 @@ def generate_campaign_breakdown_from_db(campaigns_list, date_range):
     # Sort by positive lead count
     campaign_data.sort(key=lambda x: x[1], reverse=True)
     
-    # Top 5 campaigns + others
-    top_5 = campaign_data[:5]
-    others_count = sum(c[1] for c in campaign_data[5:])
+    # Top 10 campaigns + others
+    top_10 = campaign_data[:10]
+    others_count = sum(c[1] for c in campaign_data[10:])
     
-    labels = [name for name, count in top_5]
-    values = [count for name, count in top_5]
+    labels = [name for name, count in top_10]
+    values = [count for name, count in top_10]
     
     if others_count > 0:
         labels.append('Others')
@@ -1178,95 +1184,613 @@ def generate_campaign_performance_from_db(campaigns_list, date_range):
         'contacted_counts': contacted_counts
     }
 
-def generate_map_locations_from_db(leads_list, campaigns_list, date_range):
-    """Generate state-level aggregated map data with reply counts"""
-    start_date = date_range['start']
-    end_date = date_range['end']
-    
-    # US State full names mapping
-    state_names = {
-        'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
-        'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
-        'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
-        'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
-        'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 'MO': 'Missouri',
-        'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey',
-        'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio',
-        'OK': 'Oklahoma', 'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
-        'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
-        'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming',
-        'DC': 'District of Columbia'
-    }
-    
-    # Reverse mapping: full name to code
-    name_to_code = {name.upper(): code for code, name in state_names.items()}
-    
-    def normalize_state(state_str):
-        """Normalize state string to 2-letter code, return None if not US state"""
-        if not state_str:
-            return None
-        
-        # Convert to string if it's not already
-        if not isinstance(state_str, str):
-            state_str = str(state_str)
-        
-        state_upper = state_str.strip().upper()
-        
-        # Already a 2-letter code
-        if len(state_upper) == 2 and state_upper in state_names:
-            return state_upper
-        
-        # Full state name
-        if state_upper in name_to_code:
-            return name_to_code[state_upper]
-        
-        # Canadian provinces or other non-US locations
+def build_comprehensive_address_string(custom_vars):
+    """
+    Build a comprehensive address string from ALL address-related custom variables.
+    This approach gets all address-related variables and combines them into one string,
+    then geocodes that complete string. Works regardless of variable naming conventions.
+    """
+    if not isinstance(custom_vars, list):
         return None
     
-    db_manager = get_db_manager()
-    
-    # Get leads with replies in the date range, including state from custom variable
-    leads_with_activity = db_manager.execute_query("""
-        SELECT l.state, r.interested
-        FROM leads l
-        INNER JOIN replies r ON l.id = r.lead_id
-        WHERE DATE(LEFT(r.date_received, 10)) BETWEEN %s AND %s
-        AND r.automated_reply = false
-        AND l.state IS NOT NULL
-        AND l.state != ''
-    """, (start_date.isoformat(), end_date.isoformat()))
-    
-    # Aggregate by state
-    state_stats = {}
-    
-    for lead in leads_with_activity:
-        raw_state = lead[0]
-        interested = bool(lead[1])
+    # Comprehensive patterns for address-related variables (international support)
+    address_patterns = [
+        # Street/Address patterns
+        'street', 'address', 'street_address', 'street address', 
+        'addr', 'location', 'road', 'avenue', 'ave', 'blvd', 'boulevard',
+        'drive', 'dr', 'lane', 'ln', 'way', 'st', 'place', 'pl',
+        'strasse', 'rue', 'calle', 'via', 'gasse', 'straat', 'ulica',
+        'adresse', 'direccion', 'indirizzo', 'adres', 'endereco',
         
-        # Normalize state (converts full names to codes, filters out non-US)
-        state_code = normalize_state(raw_state)
+        # City patterns
+        'city', 'town', 'municipality', 'municipal', 'locality',
+        'community', 'village', 'borough', 'township', 'stadt',
+        'ville', 'ciudad', 'citta', 'stad', 'cidade', 'miasto',
         
-        if not state_code:
+        # State/Province patterns
+        'state', 'province', 'region', 'territory', 'county',
+        'district', 'area', 'zone', 'land', 'bundesland', 'departement',
+        'provincia', 'regione', 'provincie', 'estado', 'canton',
+        
+        # Postal/Zip patterns
+        'zip', 'zip_code', 'zipcode', 'postal', 'postal_code', 
+        'postal code', 'postcode', 'post_code', 'code', 'zipcode',
+        'zip code', 'postalcode', 'plz', 'cp', 'codigo postal',
+        'codice postale', 'postcode', 'postnummer'
+    ]
+    
+    address_components = []
+    
+    for var in custom_vars:
+        var_name = var.get('name', '') or ''
+        var_value = var.get('value', '') or ''
+        
+        # Skip if name or value is None
+        if not var_name or not var_value:
+            continue
+            
+        var_name = var_name.lower().strip()
+        var_value = var_value.strip()
+        
+        # Skip empty values
+        if not var_value or var_value == 'None' or var_value == '':
             continue
         
-        # Aggregate counts
-        if state_code not in state_stats:
-            state_stats[state_code] = {
-                'state_code': state_code,
-                'state_name': state_names[state_code],
-                'total_replies': 0,
-                'interested': 0,
-                'replied': 0
-            }
-        
-        state_stats[state_code]['total_replies'] += 1
-        if interested:
-            state_stats[state_code]['interested'] += 1
-        else:
-            state_stats[state_code]['replied'] += 1
+        # Check if this variable is address-related
+        if any(pattern in var_name for pattern in address_patterns):
+            address_components.append(var_value)
+            print(f"  Added address component '{var_name}': '{var_value}'")
     
-    # Convert to list
-    return list(state_stats.values())
+    # If we found address components, combine them into a comprehensive string
+    if address_components:
+        comprehensive_address = ', '.join(address_components)
+        print(f"  Comprehensive address: '{comprehensive_address}'")
+        return comprehensive_address
+    
+    return None
+
+def extract_address_from_custom_variables(custom_vars):
+    """
+    Extract address components from custom variables with flexible naming.
+    Handles different variable names across campaigns but always finds:
+    - Street address (street, address, street_address, etc.)
+    - City (city, town, municipality, etc.)
+    - State (state, province, region, etc.)
+    - Zip/Postal code (zip, zip_code, postal_code, postal code, etc.)
+    """
+    if not isinstance(custom_vars, list):
+        return None, None, None, None
+    
+    address = None
+    city = None
+    state = None
+    zip_code = None
+    
+    # Define patterns for each address component (international support)
+    street_patterns = [
+        'street', 'address', 'street_address', 'street address', 
+        'addr', 'location', 'road', 'avenue', 'ave', 'blvd', 'boulevard',
+        'drive', 'dr', 'lane', 'ln', 'way', 'st', 'place', 'pl',
+        'strasse', 'rue', 'calle', 'via', 'gasse', 'straat', 'ulica',
+        'adresse', 'direccion', 'indirizzo', 'adres', 'endereco'
+    ]
+    
+    city_patterns = [
+        'city', 'town', 'municipality', 'municipal', 'locality',
+        'community', 'village', 'borough', 'township', 'stadt',
+        'ville', 'ciudad', 'citta', 'stad', 'cidade', 'miasto'
+    ]
+    
+    state_patterns = [
+        'state', 'province', 'region', 'territory', 'county',
+        'district', 'area', 'zone', 'land', 'bundesland', 'departement',
+        'provincia', 'regione', 'provincie', 'estado', 'canton'
+    ]
+    
+    zip_patterns = [
+        'zip', 'zip_code', 'zipcode', 'postal', 'postal_code', 
+        'postal code', 'postcode', 'post_code', 'code', 'zipcode',
+        'zip code', 'postalcode', 'plz', 'cp', 'codigo postal',
+        'codice postale', 'postcode', 'postnummer'
+    ]
+    
+    for var in custom_vars:
+        var_name = var.get('name', '').lower().strip()
+        var_value = var.get('value', '').strip()
+        
+        if not var_value or var_value == 'None':
+            continue
+        
+        # Check for street address
+        if any(pattern in var_name for pattern in street_patterns):
+            if not address:  # Take the first match
+                address = var_value
+        
+        # Check for city
+        elif any(pattern in var_name for pattern in city_patterns):
+            if not city:  # Take the first match
+                city = var_value
+        
+        # Check for state
+        elif any(pattern in var_name for pattern in state_patterns):
+            if not state:  # Take the first match
+                state = var_value
+        
+        # Check for zip/postal code
+        elif any(pattern in var_name for pattern in zip_patterns):
+            if not zip_code:  # Take the first match
+                zip_code = var_value
+    
+    # If we still don't have all components, try to infer from remaining variables
+    if not address or not city or not state or not zip_code:
+        for var in custom_vars:
+            var_name = var.get('name', '') or ''
+            var_value = var.get('value', '') or ''
+            
+            # Skip if name or value is None
+            if not var_name or not var_value:
+                continue
+                
+            var_name = var_name.lower().strip()
+            var_value = var_value.strip()
+            
+            if not var_value or var_value == 'None':
+                continue
+            
+            # Skip if already assigned
+            if var_name in [v.get('name', '').lower().strip() for v in custom_vars if v.get('value', '').strip() in [address, city, state, zip_code]]:
+                continue
+            
+            # Try to infer based on value patterns (international support)
+            if not address and len(var_value) > 10 and any(char.isdigit() for char in var_value):
+                # Looks like a street address (longer text with numbers)
+                address = var_value
+            
+            elif not city and len(var_value) > 3 and len(var_value) < 50 and not any(char.isdigit() for char in var_value):
+                # Looks like a city name (medium length, no numbers)
+                city = var_value
+            
+            elif not state and (len(var_value) == 2 and var_value.isupper()) or (len(var_value) > 3 and len(var_value) < 20):
+                # Looks like a state/province (2 uppercase letters or medium length text)
+                state = var_value
+            
+            elif not zip_code and (
+                (len(var_value) == 5 and var_value.isdigit()) or  # US ZIP
+                (len(var_value) == 10 and var_value.replace('-', '').isdigit()) or  # US ZIP+4
+                (len(var_value) == 6 and var_value.replace(' ', '').isalnum()) or  # Canadian postal
+                (len(var_value) == 4 and var_value.isdigit()) or  # Some European postal codes
+                (len(var_value) == 5 and var_value.replace(' ', '').isalnum())  # Mixed postal codes
+            ):
+                # Looks like a postal code (various international formats)
+                zip_code = var_value
+    
+    return address, city, state, zip_code
+
+def fetch_leads_from_emailbison_with_timeframe(timeframe, start_date=None, end_date=None):
+    """
+    Fetch leads from EmailBison API with timeframe filtering
+    """
+    try:
+        # Calculate date range
+        date_range = calculate_date_range(timeframe, start_date, end_date)
+        
+        # Prepare API parameters
+        params = {
+            'per_page': 100,  # Get more leads per page
+            'page': 1
+        }
+        
+        # Add date filtering based on timeframe
+        if timeframe != 'all':
+            # Use updated_at for filtering
+            params['updated_at_from'] = date_range['start'].isoformat()
+            params['updated_at_to'] = date_range['end'].isoformat()
+        
+        print(f"Fetching leads from EmailBison with params: {params}")
+        
+        # Make API request
+        url = f'{EMAILBISON_DOMAIN}/api/leads'
+        response = requests.get(url, headers=EMAILBISON_HEADERS, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        leads = data.get('data', [])
+        
+        print(f"Fetched {len(leads)} leads from EmailBison API")
+        
+        # If we have pagination, fetch more pages
+        total_pages = data.get('last_page', 1)
+        if total_pages > 1:
+            print(f"Fetching additional pages (total: {total_pages})")
+            for page in range(2, min(total_pages + 1, 6)):  # Limit to 5 pages max
+                params['page'] = page
+                try:
+                    response = requests.get(url, headers=EMAILBISON_HEADERS, params=params, timeout=30)
+                    response.raise_for_status()
+                    page_data = response.json()
+                    page_leads = page_data.get('data', [])
+                    leads.extend(page_leads)
+                    print(f"Fetched page {page}: {len(page_leads)} leads")
+                except Exception as e:
+                    print(f"Error fetching page {page}: {e}")
+                    break
+        
+        print(f"Total leads fetched: {len(leads)}")
+        return leads
+        
+    except Exception as e:
+        print(f"Error fetching leads from EmailBison: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+def sync_leads_for_timeframe(timeframe, start_date=None, end_date=None):
+    """
+    Sync leads from EmailBison API for specific timeframe and store in database
+    """
+    try:
+        print(f"\n=== Syncing leads for timeframe: {timeframe} ===")
+        
+        # Fetch leads from EmailBison API
+        leads = fetch_leads_from_emailbison_with_timeframe(timeframe, start_date, end_date)
+        
+        if not leads:
+            print("No leads fetched from EmailBison API")
+            return []
+        
+        # Get database manager
+        db_manager = get_db_manager()
+        
+        synced_leads = []
+        
+        for lead in leads:
+            try:
+                # Extract comprehensive address string from ALL address-related custom variables
+                custom_vars = lead.get('custom_variables', [])
+                comprehensive_address = build_comprehensive_address_string(custom_vars)
+                
+                # If we don't have comprehensive address, try traditional extraction
+                if not comprehensive_address:
+                    address, city, state, zip_code = extract_address_from_custom_variables(custom_vars)
+                    
+                    # If we don't have complete address, try to extract from other fields
+                    if not address or not city or not state or not zip_code:
+                        # Try to get address from other lead fields
+                        if not address:
+                            address = lead.get('address', '') or ''
+                        if not city:
+                            city = lead.get('city', '') or ''
+                        if not state:
+                            state = lead.get('state', '') or ''
+                        if not zip_code:
+                            zip_code = lead.get('zip_code', '') or lead.get('postal_code', '') or ''
+                    
+                    # Build address string from components
+                    if address and city and state and zip_code:
+                        comprehensive_address = f"{address}, {city}, {state} {zip_code}"
+                
+                print(f"Comprehensive address for lead {lead.get('id')}: '{comprehensive_address}'")
+                
+                # Determine if lead is interested
+                is_interested = lead.get('verification_status') == 'interested'
+                
+                # Parse comprehensive address into components for database storage
+                address_parts = comprehensive_address.split(', ') if comprehensive_address else []
+                street = address_parts[0] if len(address_parts) > 0 else ''
+                city = address_parts[1] if len(address_parts) > 1 else ''
+                state = address_parts[2] if len(address_parts) > 2 else ''
+                zip_code = address_parts[3] if len(address_parts) > 3 else ''
+                
+                # Also consider leads with complete address data as potentially valuable
+                has_complete_address = street and city and state and zip_code
+                if has_complete_address and not is_interested:
+                    print(f"Lead {lead.get('id')} has complete address but is not marked as interested")
+                
+                # Insert or update lead in database
+                db_manager.execute_query('''
+                    INSERT INTO leads (id, email, first_name, last_name, title, company, phone, 
+                                     state, address, city, zip_code, geocoded_address, interested, created_at, updated_at, last_synced)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                        email = EXCLUDED.email,
+                        first_name = EXCLUDED.first_name,
+                        last_name = EXCLUDED.last_name,
+                        title = EXCLUDED.title,
+                        company = EXCLUDED.company,
+                        phone = EXCLUDED.phone,
+                        state = EXCLUDED.state,
+                        address = EXCLUDED.address,
+                        city = EXCLUDED.city,
+                        zip_code = EXCLUDED.zip_code,
+                        geocoded_address = EXCLUDED.geocoded_address,
+                        interested = EXCLUDED.interested,
+                        updated_at = EXCLUDED.updated_at,
+                        last_synced = NOW()
+                ''', (
+                    lead.get('id'),
+                    lead.get('email', ''),
+                    lead.get('first_name', ''),
+                    lead.get('last_name', ''),
+                    lead.get('title', ''),
+                    lead.get('company', ''),
+                    lead.get('phone', ''),
+                    state,
+                    street,
+                    city,
+                    zip_code,
+                    comprehensive_address,  # Store comprehensive address for geocoding
+                    is_interested,
+                    lead.get('created_at', ''),
+                    lead.get('updated_at', '')
+                ))
+                
+                synced_leads.append(lead)
+                
+            except Exception as e:
+                print(f"Error processing lead {lead.get('id', 'unknown')}: {e}")
+                continue
+        
+        print(f"Successfully synced {len(synced_leads)} leads to database")
+        
+        # Trigger geocoding for leads without coordinates
+        print("Triggering geocoding for leads without coordinates...")
+        geocode_leads_for_timeframe(timeframe)
+        
+        return synced_leads
+        
+    except Exception as e:
+        print(f"Error syncing leads for timeframe: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+def geocode_leads_for_timeframe(timeframe):
+    """
+    Geocode leads for specific timeframe that don't have coordinates
+    """
+    try:
+        db_manager = get_db_manager()
+        
+        # Get leads that need geocoding for this timeframe
+        leads_to_geocode = db_manager.execute_query("""
+            SELECT id, address, city, state, zip_code, geocoded_address
+            FROM leads
+            WHERE (latitude IS NULL OR longitude IS NULL)
+            AND (
+                (address IS NOT NULL AND address != '') OR
+                (city IS NOT NULL AND city != '') OR
+                (state IS NOT NULL AND state != '') OR
+                (zip_code IS NOT NULL AND zip_code != '') OR
+                (geocoded_address IS NOT NULL AND geocoded_address != '')
+            )
+            AND interested = true
+            LIMIT 20
+        """)
+        
+        if not leads_to_geocode:
+            print("No leads need geocoding")
+            return
+        
+        print(f"Geocoding {len(leads_to_geocode)} leads...")
+        
+        for lead_row in leads_to_geocode:
+            lead_id, address, city, state, zip_code, geocoded_address = lead_row
+            
+            # Use comprehensive address if available, otherwise build from components
+            if geocoded_address and str(geocoded_address).strip():
+                full_address = str(geocoded_address).strip()
+                print(f"Using comprehensive address for lead {lead_id}: {full_address}")
+            else:
+                # Build complete address string: street, city, state zip
+                address_parts = []
+                
+                # Add street address if available
+                if address and str(address).strip() and address != 'None':
+                    address_parts.append(str(address).strip())
+                
+                # Add city if available
+                if city and str(city).strip() and city != 'None':
+                    address_parts.append(str(city).strip())
+                
+                # Add state if available
+                if state and str(state).strip() and state != 'None':
+                    address_parts.append(str(state).strip())
+                
+                # Add zip code if available
+                if zip_code and str(zip_code).strip() and zip_code != 'None':
+                    address_parts.append(str(zip_code).strip())
+                
+                # Form complete address string
+                full_address = ', '.join(address_parts)
+                
+                # Only geocode if we have a meaningful address (at least 2 components)
+                if len(address_parts) < 2:
+                    print(f"Skipping lead {lead_id}: insufficient address data ({full_address})")
+                    continue
+                
+                if not full_address:
+                    print(f"Skipping lead {lead_id}: empty address")
+                    continue
+                
+                print(f"Building address for lead {lead_id}: {full_address}")
+            
+            # Geocode the complete address
+            geocoded = geocode_address(full_address)
+            
+            if geocoded:
+                # Update the lead with coordinates
+                db_manager.execute_query("""
+                    UPDATE leads 
+                    SET latitude = %s, longitude = %s, geocoded_address = %s, geocoded_at = NOW()
+                    WHERE id = %s
+                """, (
+                    geocoded['lat'],
+                    geocoded['lng'],
+                    geocoded['display_name'],
+                    lead_id
+                ))
+                print(f"✓ Geocoded lead {lead_id}: {full_address} → {geocoded['display_name']}")
+            else:
+                print(f"✗ Failed to geocode lead {lead_id}: {full_address}")
+            
+            # Small delay to be respectful to the geocoding service
+            import time
+            time.sleep(0.5)
+        
+        print("Geocoding completed")
+        
+    except Exception as e:
+        print(f"Error in geocoding: {e}")
+
+def geocode_address(address_string):
+    """Geocode an address string to lat/lng coordinates using Nominatim (OpenStreetMap)"""
+    try:
+        if not address_string or not str(address_string).strip():
+            return None
+        
+        # Try different address formats for better geocoding success
+        address_formats = [
+            str(address_string).strip(),  # Original format
+        ]
+        
+        # If we have a full address, try simpler formats
+        if ',' in address_string:
+            parts = [str(part).strip() for part in str(address_string).split(',')]
+            if len(parts) >= 3:
+                # Try city, state zip format
+                address_formats.append(f"{parts[1]}, {parts[2]}")
+            if len(parts) >= 2:
+                # Try city, state format
+                address_formats.append(f"{parts[1]}, {parts[2].split()[0] if parts[2] else ''}")
+        
+        # Use Nominatim geocoding service
+        url = "https://nominatim.openstreetmap.org/search"
+        headers = {
+            'User-Agent': 'LongRun Reports App/1.0 (contact@longrun.agency)'
+        }
+        
+        for address_format in address_formats:
+            if not str(address_format).strip():
+                continue
+                
+            params = {
+                'q': str(address_format).strip(),
+                'format': 'json',
+                'limit': 1,
+                'addressdetails': 1
+            }
+            
+            try:
+                response = requests.get(url, params=params, headers=headers, timeout=5)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data and len(data) > 0:
+                    result = data[0]
+                    return {
+                        'lat': float(result['lat']),
+                        'lng': float(result['lon']),
+                        'display_name': result.get('display_name', ''),
+                        'confidence': result.get('importance', 0)
+                    }
+            except Exception as e:
+                print(f"Error geocoding address format '{address_format}': {e}")
+                continue
+        
+        return None
+    
+    except Exception as e:
+        print(f"Error geocoding address '{address_string}': {e}")
+        return None
+
+def generate_map_locations_from_db(leads_list, campaigns_list, date_range):
+    """Generate individual lead locations with cached coordinates for interactive map"""
+    try:
+        start_date = date_range['start']
+        end_date = date_range['end']
+        
+        db_manager = get_db_manager()
+        
+        # Get interested leads (positive replies) with their cached coordinates
+        # For shorter timeframes, also include leads from a broader range to show more data
+        if date_range['label'] in ['Last 7 Days', 'Month to Date']:
+            # For short timeframes, expand the date range to show more map data
+            extended_start = start_date - timedelta(days=90)  # Go back 90 days
+            date_filter = f"DATE(LEFT(r.date_received, 10)) BETWEEN '{extended_start.isoformat()}' AND '{end_date.isoformat()}'"
+        else:
+            date_filter = f"DATE(LEFT(r.date_received, 10)) BETWEEN '{start_date.isoformat()}' AND '{end_date.isoformat()}'"
+        
+        print(f"Map query date filter: {date_filter}")
+        
+        interested_leads = db_manager.execute_query(f"""
+            SELECT DISTINCT l.id, l.first_name, l.last_name, l.email, l.title, l.company, 
+                   l.address, l.city, l.state, l.zip_code, l.phone,
+                   l.latitude, l.longitude, l.geocoded_address,
+                   r.date_received, c.name as campaign_name
+        FROM leads l
+        INNER JOIN replies r ON l.id = r.lead_id
+            LEFT JOIN campaigns c ON r.campaign_id = c.id
+            WHERE {date_filter}
+        AND r.automated_reply = false
+            AND r.interested = true
+            AND l.latitude IS NOT NULL
+            AND l.longitude IS NOT NULL
+            ORDER BY r.date_received DESC
+        """)
+        
+        print(f"Found {len(interested_leads)} interested leads with coordinates")
+        
+        lead_locations = []
+        
+        for lead in interested_leads:
+            lead_id, first_name, last_name, email, title, company, address, city, state, zip_code, phone, lat, lng, geocoded_address, date_received, campaign_name = lead
+            
+            # Build full address string - use whatever data is available
+            address_parts = []
+            if address and str(address).strip() and address != 'None':
+                address_parts.append(str(address).strip())
+            if city and str(city).strip() and city != 'None':
+                address_parts.append(str(city).strip())
+            if state and str(state).strip() and state != 'None':
+                address_parts.append(str(state).strip())
+            if zip_code and str(zip_code).strip() and zip_code != 'None':
+                address_parts.append(str(zip_code).strip())
+            
+            # Use geocoded address if available, otherwise build from parts
+            if geocoded_address and str(geocoded_address).strip():
+                full_address = str(geocoded_address).strip()
+            elif address_parts:
+                full_address = ', '.join(address_parts)
+        else:
+            full_address = 'Unknown Address'
+        
+        lead_locations.append({
+                'lead_id': lead_id,
+                'name': f"{first_name or ''} {last_name or ''}".strip(),
+                'email': email,
+                'title': title,
+                'company': company,
+                'phone': phone,
+                'address': full_address,
+                'street': address if address != 'None' else '',
+                'city': city if city != 'None' else '',
+                'state': state if state != 'None' else '',
+                'zip': zip_code if zip_code != 'None' else '',
+                'lat': float(lat),
+                'lng': float(lng),
+                'date_received': date_received,
+                'campaign_name': campaign_name,
+                'confidence': 1.0  # Cached coordinates are considered high confidence
+            })
+        
+        print(f"Generated {len(lead_locations)} map locations")
+        return lead_locations
+        
+    except Exception as e:
+        print(f"Error in generate_map_locations_from_db: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 # Legacy API functions (kept for reference)
 def fetch_emailbison_leads(max_pages=5):
@@ -1954,7 +2478,7 @@ def generate_leads_by_title(leads_list, campaigns_list, date_range):
     title_counts = {}
     for lead in interested_leads:
         title = lead.get('title', 'No Title')
-        if title and title.strip():
+        if title and str(title).strip():
             title_counts[title] = title_counts.get(title, 0) + 1
     
     # Sort and get top 10
@@ -2036,7 +2560,7 @@ def generate_leads_by_location(leads_list, campaigns_list, date_range):
     company_counts = {}
     for lead in interested_leads:
         company = lead.get('company', 'Unknown')
-        if company and company.strip():
+        if company and str(company).strip():
             company_counts[company] = company_counts.get(company, 0) + 1
     
     # Sort and get top 10
@@ -2046,6 +2570,148 @@ def generate_leads_by_location(leads_list, campaigns_list, date_range):
     values = [c[1] for c in sorted_companies]
     
     return {'labels': labels, 'values': values}
+
+@app.route('/api/geocode-leads')
+def geocode_leads():
+    """Manual endpoint to trigger geocoding for leads"""
+    try:
+        db_manager = get_db_manager()
+        
+        # Get a few leads that need geocoding (prioritize interested leads)
+        leads_to_geocode = db_manager.execute_query("""
+            SELECT id, address, city, state, zip_code, interested
+            FROM leads
+            WHERE (latitude IS NULL OR longitude IS NULL)
+            AND (
+                (address IS NOT NULL AND address != '') OR
+                (city IS NOT NULL AND city != '') OR
+                (state IS NOT NULL AND state != '') OR
+                (zip_code IS NOT NULL AND zip_code != '')
+            )
+            ORDER BY interested DESC, id ASC
+            LIMIT 10
+        """)
+        
+        if not leads_to_geocode:
+            return jsonify({
+                'success': True,
+                'message': 'No leads need geocoding',
+                'geocoded_count': 0
+            })
+        
+        geocoded_count = 0
+        
+        for lead_row in leads_to_geocode:
+            lead_id, address, city, state, zip_code, interested = lead_row
+            
+            # Build complete address string: street, city, state zip
+            address_parts = []
+            
+            # Add street address if available
+            if address and str(address).strip() and address != 'None':
+                address_parts.append(str(address).strip())
+            
+            # Add city if available
+            if city and str(city).strip() and city != 'None':
+                address_parts.append(str(city).strip())
+            
+            # Add state if available
+            if state and str(state).strip() and state != 'None':
+                address_parts.append(str(state).strip())
+            
+            # Add zip code if available
+            if zip_code and str(zip_code).strip() and zip_code != 'None':
+                address_parts.append(str(zip_code).strip())
+            
+            # Form complete address string
+            full_address = ', '.join(address_parts)
+            
+            # Only geocode if we have a meaningful address (at least 2 components)
+            if len(address_parts) < 2:
+                print(f"Skipping lead {lead_id}: insufficient address data ({full_address})")
+                continue
+            
+            if not full_address:
+                print(f"Skipping lead {lead_id}: empty address")
+                continue
+            
+            print(f"Geocoding lead {lead_id}: {full_address}")
+            
+            # Geocode the complete address
+            geocoded = geocode_address(full_address)
+            
+            if geocoded:
+                # Update the lead with coordinates
+                db_manager.execute_query("""
+                    UPDATE leads 
+                    SET latitude = %s, longitude = %s, geocoded_address = %s, geocoded_at = NOW()
+                    WHERE id = %s
+                """, (
+                    geocoded['lat'],
+                    geocoded['lng'],
+                    geocoded['display_name'],
+                    lead_id
+                ))
+                geocoded_count += 1
+                print(f"✓ Geocoded lead {lead_id}: {full_address} → {geocoded['display_name']} (Interested: {interested})")
+            else:
+                print(f"✗ Failed to geocode lead {lead_id}: {full_address}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Geocoded {geocoded_count} leads',
+            'geocoded_count': geocoded_count
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'geocoded_count': 0
+        })
+
+@app.route('/api/custom-variables')
+def get_custom_variables():
+    """Fetch custom variables from EmailBison API to identify address-related fields"""
+    try:
+        url = f'{EMAILBISON_DOMAIN}/api/custom-variables'
+        response = requests.get(url, headers=EMAILBISON_HEADERS, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        custom_variables = data.get('data', [])
+        
+        # Filter for address-related variables
+        address_variables = []
+        address_keywords = ['address', 'city', 'state', 'zip', 'location', 'street', 'town', 'county']
+        
+        for var in custom_variables:
+            var_name = var.get('name', '').lower()
+            var_label = var.get('label', '').lower()
+            
+            # Check if variable name or label contains address-related keywords
+            if any(keyword in var_name or keyword in var_label for keyword in address_keywords):
+                address_variables.append({
+                    'id': var.get('id'),
+                    'name': var.get('name'),
+                    'label': var.get('label'),
+                    'type': var.get('type')
+                })
+        
+        return jsonify({
+            'success': True,
+            'custom_variables': custom_variables,
+            'address_variables': address_variables
+        })
+        
+    except Exception as e:
+        print(f"Error fetching custom variables: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'custom_variables': [],
+            'address_variables': []
+        })
 
 @app.route('/api/sync-data')
 def sync_data():

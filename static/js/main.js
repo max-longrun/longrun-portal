@@ -312,7 +312,12 @@ function updateCampaignBreakdownChart(data) {
                     'rgba(220, 38, 38, 0.8)',
                     'rgba(108, 117, 125, 0.8)',
                     'rgba(139, 0, 0, 0.8)',
-                    'rgba(0, 0, 0, 0.6)'
+                    'rgba(0, 0, 0, 0.6)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 206, 86, 0.8)',
+                    'rgba(153, 102, 255, 0.8)',
+                    'rgba(255, 159, 64, 0.8)'
                 ],
                 borderColor: '#fff',
                 borderWidth: 3
@@ -336,10 +341,8 @@ function updateCampaignBreakdownChart(data) {
                             if (data.labels.length && data.datasets.length) {
                                 return data.labels.map((label, i) => {
                                     const value = data.datasets[0].data[i];
-                                    const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
-                                    const percentage = ((value / total) * 100).toFixed(1);
                                     return {
-                                        text: `${label}: ${percentage}%`,
+                                        text: `${label}: ${value}`,
                                         fillStyle: data.datasets[0].backgroundColor[i],
                                         hidden: false,
                                         index: i
@@ -506,11 +509,11 @@ function updateCampaignPerformanceChart(data) {
     });
 }
 
-// 6. Interactive Choropleth Map (US States)
+// 6. Interactive Point Map (Individual Lead Locations)
 let leadsMap = null;
-let stateLayer = null;
+let leadMarkers = null;
 
-function updateInteractiveMap(stateData) {
+function updateInteractiveMap(leadLocations) {
     // Check if map container exists
     const mapContainer = document.getElementById('leadsLocationMap');
     if (!mapContainer) {
@@ -521,6 +524,7 @@ function updateInteractiveMap(stateData) {
     // Initialize map if not already created
     if (!leadsMap) {
         try {
+            // Set initial view to center of US
             leadsMap = L.map('leadsLocationMap').setView([39.8283, -98.5795], 4);
             
             // Add tile layer (OpenStreetMap)
@@ -535,122 +539,91 @@ function updateInteractiveMap(stateData) {
         }
     }
     
-    // Clear existing state layer
-    if (stateLayer) {
-        leadsMap.removeLayer(stateLayer);
+    // Clear existing markers
+    if (leadMarkers) {
+        leadMarkers.clearLayers();
+    } else {
+        leadMarkers = L.layerGroup().addTo(leadsMap);
     }
     
-    // Create state data lookup and find max replies for color scaling
-    const stateDataMap = {};
-    let maxReplies = 0;
-    stateData.forEach(state => {
-        stateDataMap[state.state_name] = state;
-        maxReplies = Math.max(maxReplies, state.total_replies);
+    if (!leadLocations || leadLocations.length === 0) {
+        console.log('No lead locations to display');
+        return;
+    }
+    
+    // Create markers for each lead location
+    leadLocations.forEach(lead => {
+        if (lead.lat && lead.lng) {
+            // Create custom marker icon
+            const markerIcon = L.divIcon({
+                className: 'custom-marker',
+                html: '<div class="marker-pin"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 20],
+                popupAnchor: [0, -20]
+            });
+            
+            // Create marker
+            const marker = L.marker([lead.lat, lead.lng], { icon: markerIcon })
+                .bindPopup(createLeadPopup(lead), {
+                    maxWidth: 300,
+                    className: 'lead-popup'
+                });
+            
+            leadMarkers.addLayer(marker);
+        }
     });
     
-    // Get color based on reply count
-    function getColor(replies) {
-        if (!replies || replies === 0) return '#e5e7eb';
-        const intensity = replies / maxReplies;
-        
-        // Blue gradient from light to dark
-        if (intensity > 0.8) return '#1e3a8a';
-        if (intensity > 0.6) return '#2563eb';
-        if (intensity > 0.4) return '#3b82f6';
-        if (intensity > 0.2) return '#60a5fa';
-        return '#93c5fd';
+    // Fit map to show all markers
+    if (leadLocations.length > 0) {
+        const group = new L.featureGroup(leadMarkers.getLayers());
+        leadsMap.fitBounds(group.getBounds().pad(0.1));
     }
     
-    // Style each state
-    function style(feature) {
-        const stateName = feature.properties.name;
-        const stateInfo = stateDataMap[stateName];
-        const replies = stateInfo ? stateInfo.total_replies : 0;
-        
-        return {
-            fillColor: getColor(replies),
-            weight: 2,
-            opacity: 1,
-            color: '#ffffff',
-            fillOpacity: 0.7
-        };
-    }
+    console.log(`Interactive map updated with ${leadLocations.length} lead locations`);
+}
+
+function createLeadPopup(lead) {
+    const replyDate = new Date(lead.date_received).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
     
-    // Highlight feature on hover
-    function highlightFeature(e) {
-        const layer = e.target;
-        const stateName = layer.feature.properties.name;
-        const stateInfo = stateDataMap[stateName];
-        
-        layer.setStyle({
-            weight: 3,
-            color: '#1f2937',
-            fillOpacity: 0.9
-        });
-        
-        layer.bringToFront();
-        
-        // Show tooltip with data
-        if (stateInfo) {
-            layer.bindTooltip(`
-                <div style="font-size: 13px; padding: 5px;">
-                    <strong>${stateName}</strong><br/>
-                    <span style="color: #3b82f6;">Replied: ${stateInfo.replied}</span><br/>
-                    <span style="color: #10b981;">Interested: ${stateInfo.interested}</span>
+    return `
+        <div class="lead-popup-content">
+            <div class="lead-header">
+                <h6 class="mb-1">${lead.name || 'Unknown Name'}</h6>
+                <small class="text-muted">${lead.title || 'No Title'} at ${lead.company || 'Unknown Company'}</small>
+            </div>
+            <div class="lead-details mt-2">
+                <div class="detail-row">
+                    <i class="fas fa-envelope me-2"></i>
+                    <span>${lead.email || 'No Email'}</span>
                 </div>
-            `, {
-                permanent: false,
-                direction: 'top',
-                className: 'state-tooltip'
-            }).openTooltip();
-        } else {
-            layer.bindTooltip(`
-                <div style="font-size: 13px; padding: 5px;">
-                    <strong>${stateName}</strong><br/>
-                    No activity
+                ${lead.phone ? `
+                <div class="detail-row">
+                    <i class="fas fa-phone me-2"></i>
+                    <span>${lead.phone}</span>
                 </div>
-            `, {
-                permanent: false,
-                direction: 'top',
-                className: 'state-tooltip'
-            }).openTooltip();
-        }
-    }
-    
-    // Reset highlight on mouse out
-    function resetHighlight(e) {
-        stateLayer.resetStyle(e.target);
-        e.target.closeTooltip();
-    }
-    
-    // Zoom to state on click
-    function zoomToFeature(e) {
-        leadsMap.fitBounds(e.target.getBounds());
-    }
-    
-    // Attach events to each feature
-    function onEachFeature(feature, layer) {
-        layer.on({
-            mouseover: highlightFeature,
-            mouseout: resetHighlight,
-            click: zoomToFeature
-        });
-    }
-    
-    // Load US states GeoJSON and create choropleth
-    fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
-        .then(response => response.json())
-        .then(data => {
-            stateLayer = L.geoJson(data, {
-                style: style,
-                onEachFeature: onEachFeature
-            }).addTo(leadsMap);
-            
-            console.log(`Choropleth map updated with ${stateData.length} states with activity`);
-        })
-        .catch(error => {
-            console.error('Error loading GeoJSON:', error);
-        });
+                ` : ''}
+                <div class="detail-row">
+                    <i class="fas fa-map-marker-alt me-2"></i>
+                    <span>${lead.address || 'No Address'}</span>
+                </div>
+                <div class="detail-row">
+                    <i class="fas fa-calendar me-2"></i>
+                    <span>Replied: ${replyDate}</span>
+                </div>
+                ${lead.campaign_name ? `
+                <div class="detail-row">
+                    <i class="fas fa-bullhorn me-2"></i>
+                    <span>Campaign: ${lead.campaign_name}</span>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
 }
 
 // Recent Activity - Replies Data
