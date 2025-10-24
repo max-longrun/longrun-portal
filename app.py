@@ -32,6 +32,16 @@ def campaign_detail(campaign_id):
     """Individual campaign detail page"""
     return render_template('campaign_detail.html', campaign_id=campaign_id)
 
+@app.route('/leads')
+def leads():
+    """Leads page"""
+    return render_template('leads.html')
+
+@app.route('/lead/<int:lead_id>')
+def lead_detail(lead_id):
+    """Individual lead detail page"""
+    return render_template('lead_detail.html', lead_id=lead_id)
+
 @app.route('/api/campaigns')
 def get_campaigns():
     """Get all campaigns with stats, sorted by status"""
@@ -2748,6 +2758,296 @@ def sync_data():
             'success': False,
             'error': str(e)
         })
+
+@app.route('/api/leads')
+def get_leads():
+    """Get all leads with filtering and search options"""
+    try:
+        from flask import request
+        
+        # Get query parameters for filtering and searching
+        search = request.args.get('search')
+        campaign = request.args.get('campaign')
+        interested = request.args.get('interested')
+        replied = request.args.get('replied')
+        emails_sent = request.args.get('filters.emails_sent')
+        created_after = request.args.get('created_after')
+        created_before = request.args.get('created_before')
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        
+        # Determine which endpoint to use based on campaign filter
+        if campaign:
+            # Use campaign-specific endpoint for campaign filtering
+            api_url = f"{EMAILBISON_DOMAIN}/api/campaigns/{campaign}/leads"
+        else:
+            # Use general leads endpoint for other filters
+            api_url = f"{EMAILBISON_DOMAIN}/api/leads"
+        
+        # Build query parameters based on EmailBison API documentation
+        params = {}
+        
+        # Add search parameter if provided
+        if search:
+            params['search'] = search
+        
+        # Add date filters if provided
+        if created_after:
+            params['created_after'] = created_after
+        if created_before:
+            params['created_before'] = created_before
+        
+        # Add pagination parameters
+        params['page'] = page
+        params['per_page'] = per_page
+        
+        # Check if we need client-side filtering for unsupported parameters
+        needs_client_filtering = interested or replied
+        
+        # Add emails sent filter using proper EmailBison API parameters
+        if emails_sent:
+            if emails_sent.isdigit():
+                # Exact match for specific number (e.g., "2" -> "=2")
+                params['filters.emails_sent'] = f'={emails_sent}'
+            elif emails_sent == '1-3':
+                # Range filter: >= 1 (covers 1-3 range)
+                params['filters.emails_sent'] = '>=1'
+        
+        # For client-side filtering, get more data from API to ensure we have enough data to filter
+        if needs_client_filtering:
+            # For client-side filtering, we need to get a larger dataset
+            # This ensures we have enough leads to filter and paginate properly
+            if campaign:
+                # For campaign-specific endpoint, get more data per page
+                params['per_page'] = min(1000, per_page * 50)
+            else:
+                # For general leads endpoint, get more data per page
+                params['per_page'] = min(1000, per_page * 50)
+        
+        # Don't send unsupported parameters to the API
+        # These will be handled by client-side filtering
+        
+        # Make request to EmailBison API
+        response = requests.get(api_url, headers=EMAILBISON_HEADERS, params=params)
+        
+        print(f"API Request: {api_url} with params: {params}")
+        print(f"API Response Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            leads_data = response.json()
+            print(f"API Response Data: {leads_data}")
+            
+            # Debug: Check if filters are being applied by the API
+            print(f"Debug - Filters sent to API:")
+            print(f"  - search: {search}")
+            print(f"  - campaign: {campaign}")
+            print(f"  - interested: {interested} (client-side)")
+            print(f"  - replied: {replied} (client-side)")
+            print(f"  - emails_sent: {emails_sent} (API: filters.emails_sent={params.get('filters.emails_sent')})")
+            print(f"  - created_after: {created_after}")
+            print(f"  - created_before: {created_before}")
+            
+            # Debug: Check response structure
+            if 'data' in leads_data:
+                print(f"Debug - Received {len(leads_data['data'])} leads")
+                if leads_data['data']:
+                    print(f"Debug - First lead sample: {leads_data['data'][0]}")
+            else:
+                print(f"Debug - No 'data' field in response")
+                print(f"Debug - Response keys: {list(leads_data.keys())}")
+            
+            # Process leads data according to EmailBison pagination format
+            leads_list = leads_data.get('data', [])
+            meta = leads_data.get('meta', {})
+            links = leads_data.get('links', {})
+            
+            # Extract pagination info from meta field
+            current_page = meta.get('current_page', page)
+            last_page = meta.get('last_page', 1)
+            total_count = meta.get('total', len(leads_list))  # Total count across all pages
+            
+            print(f"Processed: {len(leads_list)} leads, total: {total_count}, current_page: {current_page}, last_page: {last_page}")
+            
+            # Apply client-side filtering for parameters not supported by EmailBison API
+            filtered_leads = leads_list.copy()
+            
+            # Filter by interested status
+            if interested:
+                if interested == 'interested':
+                    filtered_leads = [lead for lead in filtered_leads 
+                                    if lead.get('lead_campaign_data') and 
+                                    any(campaign_data.get('interested') == True 
+                                        for campaign_data in lead.get('lead_campaign_data', []))]
+                elif interested == 'not_interested':
+                    filtered_leads = [lead for lead in filtered_leads 
+                                    if lead.get('lead_campaign_data') and 
+                                    any(campaign_data.get('interested') == False 
+                                        for campaign_data in lead.get('lead_campaign_data', []))]
+            
+            # Filter by replied status
+            if replied:
+                if replied == 'replied':
+                    filtered_leads = [lead for lead in filtered_leads 
+                                    if lead.get('lead_campaign_data') and 
+                                    any(campaign_data.get('replies', 0) > 0 
+                                        for campaign_data in lead.get('lead_campaign_data', []))]
+                elif replied == 'no_replies':
+                    filtered_leads = [lead for lead in filtered_leads 
+                                    if lead.get('lead_campaign_data') and 
+                                    all(campaign_data.get('replies', 0) == 0 
+                                        for campaign_data in lead.get('lead_campaign_data', []))]
+            
+            # Emails sent filtering is now handled by EmailBison API using proper parameters
+            # No client-side filtering needed for emails_sent
+            
+            # Apply client-side pagination if we did client-side filtering
+            # Note: emails_sent is now handled by API, so only interested/replied need client-side filtering
+            if needs_client_filtering:
+                total_filtered = len(filtered_leads)
+                start_index = (page - 1) * per_page
+                end_index = start_index + per_page
+                paginated_leads = filtered_leads[start_index:end_index]
+                total_pages = max(1, (total_filtered + per_page - 1) // per_page)  # Ceiling division, minimum 1 page
+                
+                # Ensure page number is within valid range
+                if page > total_pages:
+                    page = total_pages
+                    start_index = (page - 1) * per_page
+                    end_index = start_index + per_page
+                    paginated_leads = filtered_leads[start_index:end_index]
+                
+                print(f"Client-side filtering: {total_filtered} total, page {page}/{total_pages}, showing {len(paginated_leads)} leads")
+                print(f"Pagination details: start_index={start_index}, end_index={end_index}, per_page={per_page}")
+            else:
+                paginated_leads = filtered_leads
+                total_filtered = total_count
+                total_pages = last_page
+                print(f"API pagination: {total_filtered} total, page {page}/{total_pages}, showing {len(paginated_leads)} leads")
+            
+            # Format dates
+            for lead in paginated_leads:
+                if lead.get('created_at'):
+                    lead['formatted_created_at'] = format_date(lead['created_at'])
+                if lead.get('updated_at'):
+                    lead['formatted_updated_at'] = format_date(lead['updated_at'])
+            
+            return jsonify({
+                'success': True,
+                'leads': paginated_leads,
+                'total': total_filtered,
+                'current_page': page,
+                'last_page': total_pages,
+                'per_page': per_page,
+                'links': links,
+                'meta': meta,
+                'filters_applied': {
+                    'search': search,
+                    'campaign': campaign,
+                    'interested': interested,
+                    'replied': replied,
+                    'emails_sent': emails_sent,
+                    'created_after': created_after,
+                    'created_before': created_before
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'API request failed with status {response.status_code}',
+                'leads': [],
+                'total': 0
+            })
+            
+    except Exception as e:
+        print(f"Error fetching leads data: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'leads': [],
+            'total': 0
+        })
+
+@app.route('/api/lead/<int:lead_id>')
+def get_lead_detail(lead_id):
+    """Get individual lead details with all available data"""
+    try:
+        # Build the API URL for specific lead
+        api_url = f"{EMAILBISON_DOMAIN}/api/leads/{lead_id}"
+        
+        print(f"API Request: {api_url}")
+        
+        # Make request to EmailBison API
+        response = requests.get(api_url, headers=EMAILBISON_HEADERS)
+        
+        print(f"API Response Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            lead_data = response.json()
+            print(f"API Response Data: {lead_data}")
+            
+            # Process lead data to add formatted dates
+            if lead_data.get('created_at'):
+                lead_data['formatted_created_at'] = format_date(lead_data['created_at'])
+            if lead_data.get('updated_at'):
+                lead_data['formatted_updated_at'] = format_date(lead_data['updated_at'])
+            
+            # Log all available fields for debugging
+            print(f"Available lead fields: {list(lead_data.keys())}")
+            
+            return jsonify({
+                'success': True,
+                'lead': lead_data
+            })
+        elif response.status_code == 404:
+            return jsonify({
+                'success': False,
+                'error': 'Lead not found',
+                'lead': None
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'API request failed with status {response.status_code}',
+                'lead': None
+            })
+            
+    except Exception as e:
+        print(f"Error fetching lead details: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'lead': None
+        })
+
+@app.route('/api/lead/<int:lead_id>/sent-emails')
+def get_lead_sent_emails(lead_id):
+    """Get sent emails for a specific lead"""
+    try:
+        url = f"{EMAILBISON_DOMAIN}/api/leads/{lead_id}/sent-emails"
+        response = requests.get(url, headers=EMAILBISON_HEADERS)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return jsonify({'error': 'Failed to fetch sent emails'}), response.status_code
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/lead/<int:lead_id>/replies')
+def get_lead_replies(lead_id):
+    """Get replies for a specific lead"""
+    try:
+        url = f"{EMAILBISON_DOMAIN}/api/leads/{lead_id}/replies"
+        response = requests.get(url, headers=EMAILBISON_HEADERS)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return jsonify({'error': 'Failed to fetch replies'}), response.status_code
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Initialize database and start background sync

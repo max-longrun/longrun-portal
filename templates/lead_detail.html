@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Details - Lead Generation Analytics</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Custom Brand Colors Override -->
+    <style>
+        .btn-primary {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .btn-primary:hover {
+            background-color: #e55a2b;
+            border-color: #e55a2b;
+        }
+        .btn-outline-primary {
+            color: var(--bright-orange);
+            border-color: var(--bright-orange);
+        }
+        .btn-outline-primary:hover {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .text-muted {
+            color: var(--text-secondary) !important;
+        }
+        .navbar-toggler {
+            border-color: var(--bright-orange);
+        }
+        .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 107, 53, 1%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='m4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+    </style>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <style>
+        /* Lead Detail Styles */
+        .lead-header {
+            background: var(--primary-white);
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-light);
+        }
+        
+        .lead-name {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+        
+        .lead-title {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+        
+        .lead-status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: capitalize;
+            display: inline-block;
+        }
+        
+        .status-new {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .status-contacted {
+            background-color: #fff3e0;
+            color: #f57c00;
+        }
+        
+        .status-converted {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+        }
+        
+        .status-unqualified {
+            background-color: #ffebee;
+            color: #d32f2f;
+        }
+        
+        .info-card {
+            background: var(--primary-white);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-light);
+        }
+        
+        .info-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .info-card h3 i {
+            color: var(--bright-orange);
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .info-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-value {
+            font-size: 1rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        
+        .info-value.empty {
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+        
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--bright-orange);
+            text-decoration: none;
+            font-weight: 500;
+            margin-bottom: 24px;
+            transition: color 0.2s ease;
+        }
+        
+        .back-button:hover {
+            color: #e55a2b;
+        }
+        
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border-light);
+            border-top: 4px solid var(--bright-orange);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+        
+        .error-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .error-state i {
+            font-size: 4rem;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+        
+        .error-state h3 {
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+        
+        .error-state p {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+        
+        .page-subtitle {
+            font-size: 1.1rem;
+            opacity: 0.8;
+            margin: 8px 0 0 0;
+        }
+
+        /* Conversation Styles */
+        .conversation-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: var(--primary-white);
+            border-radius: 12px;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .conversation-container {
+            max-height: 600px;
+            overflow-y: auto;
+            padding: 20px 0;
+            background: #fafafa;
+        }
+
+        .conversation-message {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            padding: 0 15px;
+        }
+
+        .conversation-message.sent {
+            justify-content: flex-end;
+        }
+
+        .conversation-message.received {
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 20px;
+            position: relative;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-bubble.sent {
+            background: var(--bright-orange);
+            color: white;
+            border-radius: 35px 35px 3px 35px;
+        }
+
+        .message-bubble.received {
+            background: #e3f2fd;
+            color: var(--text-primary);
+            border-radius: 35px 35px 35px 3px;
+        }
+
+        .message-header {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .message-subject {
+            font-weight: 700;
+            margin-bottom: 8px;
+            font-size: 1rem;
+        }
+
+        .message-content {
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 8px;
+        }
+
+        .loading-conversation {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        /* Custom scrollbar for conversation container */
+        .conversation-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .conversation-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .conversation-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        .conversation-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* Add some spacing between messages */
+        .conversation-message:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="LongRun" height="35">
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/leads"><i class="fas fa-users me-1"></i>Leads</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/campaigns"><i class="fas fa-envelope me-1"></i>Campaigns</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-cog me-1"></i>Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="container">
+            <h1 class="page-title">Lead Details</h1>
+            <p class="page-subtitle">Complete information about this lead</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Back Button -->
+        <a href="/leads" class="back-button">
+            <i class="fas fa-arrow-left"></i>
+            Back to Leads
+        </a>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-container">
+            <div class="spinner"></div>
+            <p class="loading-text">Loading lead details...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="errorState" class="error-state" style="display: none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h3>Lead Not Found</h3>
+            <p>The lead you're looking for doesn't exist or has been removed.</p>
+            <a href="/leads" class="btn btn-primary">
+                <i class="fas fa-arrow-left me-1"></i>Back to Leads
+            </a>
+        </div>
+
+        <!-- Lead Details Container -->
+        <div id="leadDetailsContainer" style="display: none;">
+            <!-- Lead Header -->
+            <div class="lead-header">
+                <h1 class="lead-name" id="leadName">Loading...</h1>
+                <p class="lead-title" id="leadTitle">Loading...</p>
+                <span class="lead-status" id="leadStatus">Loading...</span>
+            </div>
+
+            <!-- Contact Information -->
+            <div class="info-card">
+                <h3><i class="fas fa-address-book"></i>Contact Information</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Email Address</span>
+                        <span class="info-value" id="leadEmail">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Phone Number</span>
+                        <span class="info-value" id="leadPhone">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Company</span>
+                        <span class="info-value" id="leadCompany">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Job Title</span>
+                        <span class="info-value" id="leadJobTitle">Loading...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Information -->
+            <div class="info-card">
+                <h3><i class="fas fa-info-circle"></i>Additional Information</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Lead ID</span>
+                        <span class="info-value" id="leadId">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Status</span>
+                        <span class="info-value" id="leadStatusDetail">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Created Date</span>
+                        <span class="info-value" id="leadCreated">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Last Updated</span>
+                        <span class="info-value" id="leadUpdated">Loading...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Address Information (if available) -->
+            <div class="info-card" id="addressCard" style="display: none;">
+                <h3><i class="fas fa-map-marker-alt"></i>Address Information</h3>
+                <div class="info-grid" id="addressGrid">
+                    <!-- Address fields will be dynamically loaded here -->
+                </div>
+            </div>
+
+            <!-- Social Media & Web Presence (if available) -->
+            <div class="info-card" id="webPresenceCard" style="display: none;">
+                <h3><i class="fas fa-globe"></i>Web Presence</h3>
+                <div class="info-grid" id="webPresenceGrid">
+                    <!-- Web presence fields will be dynamically loaded here -->
+                </div>
+            </div>
+
+            <!-- Campaign Data (if available) -->
+            <div class="info-card" id="campaignCard" style="display: none;">
+                <h3><i class="fas fa-chart-line"></i>Campaign Data</h3>
+                <div class="info-grid" id="campaignGrid">
+                    <!-- Campaign data will be dynamically loaded here -->
+                </div>
+            </div>
+
+            <!-- Custom Fields (if any) -->
+            <div class="info-card" id="customFieldsCard" style="display: none;">
+                <h3><i class="fas fa-tags"></i>Custom Fields</h3>
+                <div class="info-grid" id="customFieldsGrid">
+                    <!-- Custom fields will be dynamically loaded here -->
+                </div>
+            </div>
+
+            <!-- Load Conversation Button -->
+            <div class="text-center mt-4">
+                <button id="loadConversationBtn" class="btn btn-primary">
+                    <i class="fas fa-comments me-2"></i>Load Conversation
+                </button>
+            </div>
+
+            <!-- Conversation Section -->
+            <div id="conversationSection" class="conversation-section" style="display: none;">
+                <h3><i class="fas fa-comments me-2"></i>Conversation</h3>
+                <div id="conversationContainer" class="conversation-container">
+                    <!-- Conversation messages will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Lead Detail JavaScript -->
+    <script>
+        const leadId = {{ lead_id }};
+        let leadData = null;
+        let campaignNames = {}; // Cache for campaign names
+        let campaignsLoaded = false;
+
+        // Load all campaigns once and cache them
+        async function loadCampaigns() {
+            if (campaignsLoaded) return campaignNames;
+            
+            try {
+                const response = await fetch('/api/campaigns');
+                if (response.ok) {
+                    const campaigns = await response.json();
+                    campaigns.forEach(campaign => {
+                        campaignNames[campaign.id] = campaign.name;
+                    });
+                    campaignsLoaded = true;
+                }
+            } catch (error) {
+                console.error('Error loading campaigns:', error);
+            }
+            return campaignNames;
+        }
+
+        // Get campaign name from cache
+        function getCampaignName(campaignId) {
+            return campaignNames[campaignId] || 
+                   campaignNames[String(campaignId)] || 
+                   campaignNames[Number(campaignId)] || 
+                   `Campaign ${campaignId}`;
+        }
+
+        // Utility function to format text
+        function formatText(text) {
+            if (!text) return '';
+            return text.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadCampaigns();
+            loadLeadDetails();
+            setupConversationButton();
+        });
+
+        // Setup conversation button
+        function setupConversationButton() {
+            const loadBtn = document.getElementById('loadConversationBtn');
+            if (loadBtn) {
+                loadBtn.addEventListener('click', loadConversation);
+            }
+        }
+
+        // Load conversation data
+        async function loadConversation() {
+            const loadBtn = document.getElementById('loadConversationBtn');
+            const conversationSection = document.getElementById('conversationSection');
+            const conversationContainer = document.getElementById('conversationContainer');
+            
+            // Show loading state
+            loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
+            loadBtn.disabled = true;
+            
+            conversationSection.style.display = 'block';
+            conversationContainer.innerHTML = '<div class="loading-conversation"><i class="fas fa-spinner fa-spin me-2"></i>Loading conversation...</div>';
+            
+            try {
+                // Make parallel requests for sent emails and replies through Flask backend
+                const [sentEmailsResponse, repliesResponse] = await Promise.all([
+                    fetch(`/api/lead/${leadId}/sent-emails`),
+                    fetch(`/api/lead/${leadId}/replies`)
+                ]);
+                
+                let sentEmails = [];
+                let replies = [];
+                
+                if (sentEmailsResponse.ok) {
+                    const sentEmailsData = await sentEmailsResponse.json();
+                    sentEmails = Array.isArray(sentEmailsData) ? sentEmailsData : (sentEmailsData.data || []);
+                } else {
+                    console.warn('Failed to fetch sent emails:', sentEmailsResponse.status);
+                }
+                
+                if (repliesResponse.ok) {
+                    const repliesData = await repliesResponse.json();
+                    replies = Array.isArray(repliesData) ? repliesData : (repliesData.data || []);
+                } else {
+                    console.warn('Failed to fetch replies:', repliesResponse.status);
+                }
+                
+                // Combine and sort messages
+                const messages = [];
+                
+                // Add sent emails
+                if (Array.isArray(sentEmails)) {
+                    sentEmails.forEach(email => {
+                        messages.push({
+                            type: 'sent',
+                            sender: 'LongRun',
+                            subject: email.email_subject || email.subject || 'No Subject',
+                            content: email.email_body || email.content || email.body || '',
+                            timestamp: email.sent_at || email.created_at || new Date().toISOString()
+                        });
+                    });
+                }
+                
+                // Add replies
+                if (Array.isArray(replies)) {
+                    replies.forEach(reply => {
+                        messages.push({
+                            type: 'received',
+                            sender: reply.from_name || (leadData ? `${leadData.first_name || ''} ${leadData.last_name || ''}`.trim() || 'Lead' : 'Lead'),
+                            subject: reply.subject || 'No Subject',
+                            content: reply.text_body || reply.html_body || reply.content || reply.body || '',
+                            timestamp: reply.date_received || reply.received_at || reply.created_at || new Date().toISOString()
+                        });
+                    });
+                }
+                
+                // Sort by timestamp (latest first)
+                messages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                // Render messages
+                renderConversation(messages);
+                
+            } catch (error) {
+                console.error('Error loading conversation:', error);
+                conversationContainer.innerHTML = `
+                    <div class="loading-conversation text-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error loading conversation: ${error.message || 'Unknown error'}
+                    </div>
+                `;
+            } finally {
+                // Reset button
+                loadBtn.innerHTML = '<i class="fas fa-comments me-2"></i>Load Conversation';
+                loadBtn.disabled = false;
+            }
+        }
+
+        // Sanitize and format message content
+        function formatMessageContent(content) {
+            if (!content) return '';
+            
+            // If content is already plain text (like text_body), use it directly
+            if (!content.includes('<') && !content.includes('>')) {
+                return content.trim();
+            }
+            
+            // Convert HTML entities and clean up the content
+            const div = document.createElement('div');
+            div.innerHTML = content;
+            const textContent = div.textContent || div.innerText || '';
+            
+            // Clean up extra whitespace and preserve line breaks
+            return textContent
+                .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
+                .replace(/\n\s*\n/g, '\n')  // Remove empty lines
+                .trim();
+        }
+
+        // Format timestamp to "12:34 23 Oct" format
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const day = date.getDate();
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const month = monthNames[date.getMonth()];
+            
+            return `${hours}:${minutes} ${day} ${month}`;
+        }
+
+        // Render conversation messages
+        function renderConversation(messages) {
+            const conversationContainer = document.getElementById('conversationContainer');
+            
+            if (messages.length === 0) {
+                conversationContainer.innerHTML = '<div class="loading-conversation"><i class="fas fa-comment-slash me-2"></i>No conversation found</div>';
+                return;
+            }
+            
+            let conversationHTML = '';
+            
+            messages.forEach(message => {
+                const messageClass = message.type === 'sent' ? 'sent' : 'received';
+                const bubbleClass = message.type === 'sent' ? 'sent' : 'received';
+                const formattedTime = formatTimestamp(message.timestamp);
+                const formattedContent = formatMessageContent(message.content);
+                
+                conversationHTML += `
+                    <div class="conversation-message ${messageClass}">
+                        <div class="message-bubble ${bubbleClass}">
+                            <div class="message-header">${message.sender}</div>
+                            <div class="message-subject">${message.subject}</div>
+                            <div class="message-content" style="white-space: pre-wrap;">${formattedContent}</div>
+                            <div class="message-time">${formattedTime}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            conversationContainer.innerHTML = conversationHTML;
+        }
+
+        // Load lead details
+        async function loadLeadDetails() {
+            try {
+                const response = await fetch(`/api/lead/${leadId}`);
+                const data = await response.json();
+                
+                if (data.success && data.lead) {
+                    leadData = data.lead;
+                    renderLeadDetails();
+                } else {
+                    showErrorState(data.error || 'Lead not found');
+                }
+            } catch (error) {
+                console.error('Error loading lead details:', error);
+                showErrorState('Failed to load lead details');
+            }
+        }
+
+        // Render lead details
+        function renderLeadDetails() {
+            const container = document.getElementById('leadDetailsContainer');
+            const loadingState = document.getElementById('loadingState');
+            
+            loadingState.style.display = 'none';
+            container.style.display = 'block';
+
+            console.log('Rendering lead details:', leadData);
+            console.log('Lead data keys:', Object.keys(leadData));
+
+            // Extract the actual lead data from the nested structure
+            const actualLeadData = leadData.data || leadData;
+            console.log('Actual lead data:', actualLeadData);
+
+            // Update header
+            const fullName = `${actualLeadData.first_name || ''} ${actualLeadData.last_name || ''}`.trim() || 'Unknown Lead';
+            document.getElementById('leadName').textContent = fullName;
+            
+            const title = actualLeadData.title || actualLeadData.job_title || actualLeadData.position || 'No title provided';
+            document.getElementById('leadTitle').textContent = title;
+            
+            const status = actualLeadData.status || 'unknown';
+            const statusElement = document.getElementById('leadStatus');
+            statusElement.textContent = status;
+            statusElement.className = `lead-status status-${status.toLowerCase()}`;
+
+            // Update contact information
+            document.getElementById('leadEmail').textContent = actualLeadData.email || 'N/A';
+            document.getElementById('leadEmail').className = actualLeadData.email ? 'info-value' : 'info-value empty';
+            
+            document.getElementById('leadPhone').textContent = actualLeadData.phone || actualLeadData.phone_number || 'N/A';
+            document.getElementById('leadPhone').className = (actualLeadData.phone || actualLeadData.phone_number) ? 'info-value' : 'info-value empty';
+            
+            document.getElementById('leadCompany').textContent = actualLeadData.company || actualLeadData.company_name || 'N/A';
+            document.getElementById('leadCompany').className = (actualLeadData.company || actualLeadData.company_name) ? 'info-value' : 'info-value empty';
+            
+            document.getElementById('leadJobTitle').textContent = actualLeadData.title || actualLeadData.job_title || actualLeadData.position || 'N/A';
+            document.getElementById('leadJobTitle').className = (actualLeadData.title || actualLeadData.job_title || actualLeadData.position) ? 'info-value' : 'info-value empty';
+
+            // Update additional information
+            document.getElementById('leadId').textContent = actualLeadData.id || 'N/A';
+            document.getElementById('leadStatusDetail').textContent = status;
+            document.getElementById('leadCreated').textContent = actualLeadData.formatted_created_at || 'N/A';
+            document.getElementById('leadUpdated').textContent = actualLeadData.formatted_updated_at || 'N/A';
+
+            // Render additional sections with the correct data
+            renderAddressInformation(actualLeadData);
+            renderWebPresence(actualLeadData);
+            renderCampaignData(actualLeadData);
+            renderCustomFields(actualLeadData);
+        }
+
+        // Render address information
+        function renderAddressInformation(leadData) {
+            const addressCard = document.getElementById('addressCard');
+            const addressGrid = document.getElementById('addressGrid');
+            
+            const addressFields = [
+                'address', 'street_address', 'city', 'state', 'province', 
+                'zip_code', 'postal_code', 'country', 'location'
+            ];
+            
+            let addressHTML = '';
+            
+            // Check for address fields in custom_variables array
+            if (leadData.custom_variables && Array.isArray(leadData.custom_variables)) {
+                const customAddressFields = ['street', 'city', 'state', 'zip', 'address', 'country'];
+                leadData.custom_variables.forEach(customVar => {
+                    if (customAddressFields.includes(customVar.name) && customVar.value) {
+                        addressHTML += `
+                            <div class="info-item">
+                                <span class="info-label">${formatFieldName(customVar.name)}</span>
+                                <span class="info-value">${formatFieldValue(customVar.value)}</span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+            
+            // Check for address fields in main data
+            const availableAddressFields = addressFields.filter(field => 
+                leadData[field] && leadData[field] !== '' && leadData[field] !== null
+            );
+            
+            availableAddressFields.forEach(field => {
+                addressHTML += `
+                    <div class="info-item">
+                        <span class="info-label">${formatFieldName(field)}</span>
+                        <span class="info-value">${formatFieldValue(leadData[field])}</span>
+                    </div>
+                `;
+            });
+            
+            if (addressHTML) {
+                addressGrid.innerHTML = addressHTML;
+                addressCard.style.display = 'block';
+            } else {
+                addressCard.style.display = 'none';
+            }
+        }
+
+        // Render web presence information
+        function renderWebPresence(leadData) {
+            const webPresenceCard = document.getElementById('webPresenceCard');
+            const webPresenceGrid = document.getElementById('webPresenceGrid');
+            
+            const webFields = [
+                'website', 'linkedin', 'twitter', 'facebook', 'instagram', 
+                'github', 'portfolio', 'blog', 'social_media', 'url'
+            ];
+            
+            let webHTML = '';
+            
+            // Check for web fields in custom_variables array
+            if (leadData.custom_variables && Array.isArray(leadData.custom_variables)) {
+                const customWebFields = ['website', 'url', 'linkedin', 'twitter', 'facebook', 'instagram', 'github'];
+                leadData.custom_variables.forEach(customVar => {
+                    if (customWebFields.includes(customVar.name) && customVar.value) {
+                        webHTML += `
+                            <div class="info-item">
+                                <span class="info-label">${formatFieldName(customVar.name)}</span>
+                                <span class="info-value">
+                                    ${customVar.name.includes('url') || customVar.name.includes('website') || customVar.name.includes('linkedin') || customVar.name.includes('twitter') || customVar.name.includes('facebook') || customVar.name.includes('instagram') || customVar.name.includes('github') ? 
+                                        `<a href="${customVar.value}" target="_blank" rel="noopener noreferrer">${customVar.value}</a>` : 
+                                        formatFieldValue(customVar.value)
+                                    }
+                                </span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+            
+            // Check for web fields in main data
+            const availableWebFields = webFields.filter(field => 
+                leadData[field] && leadData[field] !== '' && leadData[field] !== null
+            );
+            
+            availableWebFields.forEach(field => {
+                webHTML += `
+                    <div class="info-item">
+                        <span class="info-label">${formatFieldName(field)}</span>
+                        <span class="info-value">
+                            ${field.includes('url') || field.includes('website') || field.includes('linkedin') || field.includes('twitter') || field.includes('facebook') || field.includes('instagram') || field.includes('github') ? 
+                                `<a href="${leadData[field]}" target="_blank" rel="noopener noreferrer">${leadData[field]}</a>` : 
+                                formatFieldValue(leadData[field])
+                            }
+                        </span>
+                    </div>
+                `;
+            });
+            
+            if (webHTML) {
+                webPresenceGrid.innerHTML = webHTML;
+                webPresenceCard.style.display = 'block';
+            } else {
+                webPresenceCard.style.display = 'none';
+            }
+        }
+
+        // Render campaign data
+        function renderCampaignData(leadData) {
+            const campaignCard = document.getElementById('campaignCard');
+            const campaignGrid = document.getElementById('campaignGrid');
+            
+            if (!campaignCard || !campaignGrid) return; // Skip if elements don't exist
+            
+            if (leadData.lead_campaign_data && Array.isArray(leadData.lead_campaign_data) && leadData.lead_campaign_data.length > 0) {
+                let campaignHTML = '';
+                
+                leadData.lead_campaign_data.forEach(campaign => {
+                    const campaignId = campaign.campaign_id;
+                    const campaignName = getCampaignName(campaignId);
+                    const formattedStatus = formatText(campaign.status);
+                    
+                    campaignHTML += `
+                        <div class="info-item">
+                            <span class="info-label">${campaignName}</span>
+                            <div class="info-value">
+                                <div>Status: ${formattedStatus}</div>
+                                <div>Emails Sent: ${campaign.emails_sent}</div>
+                                <div>Opens: ${campaign.opens}</div>
+                                <div>Replies: ${campaign.replies}</div>
+                                <div>Interested: ${campaign.interested ? 'Yes' : 'No'}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                campaignGrid.innerHTML = campaignHTML;
+                campaignCard.style.display = 'block';
+            } else {
+                campaignCard.style.display = 'none';
+            }
+        }
+
+        // Render custom fields
+        function renderCustomFields(leadData) {
+            const customFieldsCard = document.getElementById('customFieldsCard');
+            const customFieldsGrid = document.getElementById('customFieldsGrid');
+            
+            // Find custom fields (fields that are not standard lead fields)
+            const standardFields = [
+                'id', 'first_name', 'last_name', 'email', 'phone', 'phone_number', 
+                'company', 'company_name', 'title', 'job_title', 'position', 
+                'status', 'created_at', 'updated_at', 'formatted_created_at', 
+                'formatted_updated_at', 'full_name', 'name',
+                // Address fields
+                'address', 'street_address', 'city', 'state', 'province', 
+                'zip_code', 'postal_code', 'country', 'location',
+                // Web presence fields
+                'website', 'linkedin', 'twitter', 'facebook', 'instagram', 
+                'github', 'portfolio', 'blog', 'social_media', 'url',
+                // Other fields we handle separately
+                'custom_variables', 'lead_campaign_data', 'overall_stats', 'tags', 'notes'
+            ];
+            
+            const customFields = Object.keys(leadData).filter(key => 
+                !standardFields.includes(key) && 
+                leadData[key] !== null && 
+                leadData[key] !== '' &&
+                leadData[key] !== undefined
+            );
+            
+            console.log('Custom fields found:', customFields);
+            
+            let customFieldsHTML = '';
+            
+            // Handle custom_variables array if it exists
+            if (leadData.custom_variables && Array.isArray(leadData.custom_variables)) {
+                console.log('Processing custom_variables array:', leadData.custom_variables);
+                leadData.custom_variables.forEach(customVar => {
+                    // Skip fields we already handle in other sections
+                    const handledFields = ['street', 'city', 'state', 'zip', 'website', 'url', 'phone'];
+                    if (!handledFields.includes(customVar.name) && customVar.value) {
+                        customFieldsHTML += `
+                            <div class="info-item">
+                                <span class="info-label">${formatFieldName(customVar.name)}</span>
+                                <span class="info-value">${formatFieldValue(customVar.value)}</span>
+                            </div>
+                        `;
+                    }
+                });
+            }
+            
+            // Handle other custom fields
+            customFields.forEach(field => {
+                customFieldsHTML += `
+                    <div class="info-item">
+                        <span class="info-label">${formatFieldName(field)}</span>
+                        <span class="info-value">${formatFieldValue(leadData[field])}</span>
+                    </div>
+                `;
+            });
+            
+            if (customFieldsHTML) {
+                customFieldsGrid.innerHTML = customFieldsHTML;
+                customFieldsCard.style.display = 'block';
+            } else {
+                customFieldsCard.style.display = 'none';
+            }
+        }
+
+        // Format field values for display
+        function formatFieldValue(value) {
+            if (value === null || value === undefined) return 'N/A';
+            if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+            if (typeof value === 'object') return JSON.stringify(value);
+            return String(value);
+        }
+
+        // Format field names for display
+        function formatFieldName(fieldName) {
+            return fieldName
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        // Show error state
+        function showErrorState(errorMessage) {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'block';
+            document.getElementById('leadDetailsContainer').style.display = 'none';
+            
+            console.error('Lead detail error:', errorMessage);
+        }
+    </script>
+
+    <!-- Bottom Spacing -->
+    <div style="height: 30px;"></div>
+</body>
+</html>

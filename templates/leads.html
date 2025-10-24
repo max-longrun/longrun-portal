@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leads - Lead Generation Analytics</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Custom Brand Colors Override -->
+    <style>
+        .btn-primary {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .btn-primary:hover {
+            background-color: #e55a2b;
+            border-color: #e55a2b;
+        }
+        .btn-outline-primary {
+            color: var(--bright-orange);
+            border-color: var(--bright-orange);
+        }
+        .btn-outline-primary:hover {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .btn-outline-primary.active {
+            background-color: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        .text-muted {
+            color: var(--text-secondary) !important;
+        }
+        .navbar-toggler {
+            border-color: var(--bright-orange);
+        }
+        .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 107, 53, 1%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='m4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+        }
+    </style>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <style>
+        /* Lead-specific styles */
+        .leads-table {
+            background: var(--primary-white);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-left: -15px;
+            margin-right: -15px;
+            padding-left: 15px;
+            padding-right: 15px;
+        }
+        
+        .table-header {
+            background: var(--background-light);
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .table-header-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+            gap: 16px;
+            align-items: center;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+        
+        .table-header-row .status-header {
+            text-align: center;
+        }
+        
+        .lead-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+            gap: 16px;
+            align-items: center;
+            padding: 12px 20px;
+            border: 1px solid #e9ecef;
+            border-radius: 16px;
+            margin-bottom: 8px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            transform: translateY(0);
+        }
+        
+        .lead-row > div {
+            position: relative;
+        }
+        
+        .lead-row > div:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            right: -8px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background-color: #e9ecef;
+            z-index: 1;
+            height: 100%;
+        }
+        
+        .lead-row:hover {
+            background-color: #f8f9fa;
+            border: 1px solid var(--bright-orange);
+            border-radius: 16px;
+            transform: translateY(-1px) scale(1.01);
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.25);
+        }
+        
+        .lead-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+        
+        .lead-status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-transform: capitalize;
+            text-align: center;
+            display: inline-block;
+            min-width: 80px;
+        }
+        
+        .status-interested {
+            background-color: #4caf50;
+            color: #ffffff;
+        }
+        
+        .status-replied {
+            background-color: #c8e6c9;
+            color: #2e7d32;
+        }
+        
+        .status-contacted {
+            background-color: #f5f5f5;
+            color: #333333;
+        }
+        
+        .status-not-contacted {
+            background-color: transparent;
+            color: #333333;
+        }
+        
+        .status-unverified {
+            background-color: transparent;
+            color: #333333;
+        }
+        
+        .lead-field {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            word-break: break-word;
+        }
+        
+        .lead-field.empty {
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+        
+        .lead-date {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+        
+        .search-filter-section {
+            background: var(--primary-white);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            margin-top: 40px;
+        }
+        
+        .search-filter-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        
+        .search-container {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            max-width: 400px;
+        }
+        
+        .search-input {
+            flex: 1;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px 0 0 12px;
+            padding: 12px 16px;
+            font-size: 0.875rem;
+            border-right: none;
+            background: #fafafa;
+            transition: all 0.2s ease;
+        }
+        
+        .search-input:hover {
+            border-color: #d0d0d0;
+            background-color: #f5f5f5;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: var(--bright-orange);
+            box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25);
+            background: var(--primary-white);
+        }
+        
+        .search-button {
+            background: var(--bright-orange);
+            border: 1px solid var(--bright-orange);
+            border-radius: 0 12px 12px 0;
+            padding: 12px 16px;
+            color: var(--primary-white);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            height: 48px;
+            width: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .search-button:hover {
+            background: #e55a2b;
+            border-color: #e55a2b;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+        }
+        
+        .filter-toggle-button {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .filter-toggle-button:hover {
+            border-color: var(--bright-orange);
+            color: var(--bright-orange);
+            background: var(--primary-white);
+        }
+        
+        .filter-toggle-button.active {
+            border-color: var(--bright-orange);
+            color: var(--bright-orange);
+            background: rgba(255, 107, 53, 0.05);
+        }
+        
+        .filter-toggle-button i {
+            transition: transform 0.2s ease;
+        }
+        
+        .filter-toggle-button.active i {
+            transform: rotate(180deg);
+        }
+        
+        .leads-count {
+            margin-top: 12px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        .active-filters-container {
+            margin-top: 16px;
+            margin-bottom: 8px;
+        }
+        
+        .active-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .filter-options {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .filter-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .filter-label {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+        
+        .filter-select {
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 0.875rem;
+            background: #fafafa;
+            transition: all 0.2s ease;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+            padding-right: 40px;
+            cursor: pointer;
+        }
+        
+        .filter-select:hover {
+            border-color: #d0d0d0;
+            background-color: #f5f5f5;
+        }
+        
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--bright-orange);
+            box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25);
+            background-color: var(--primary-white);
+        }
+        
+        .date-range-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .date-input {
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 0.875rem;
+            flex: 1;
+            background: #fafafa;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .date-input:hover {
+            border-color: #d0d0d0;
+            background-color: #f5f5f5;
+        }
+        
+        .date-input:focus {
+            outline: none;
+            border-color: var(--bright-orange);
+            box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25);
+            background-color: var(--primary-white);
+        }
+        
+        .date-separator {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .filter-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: flex-end;
+        }
+        
+        .filter-actions .btn {
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 10px 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .filter-actions .btn-primary {
+            background: var(--bright-orange);
+            border-color: var(--bright-orange);
+            color: var(--primary-white);
+        }
+        
+        .filter-actions .btn-primary:hover {
+            background: #e55a2b;
+            border-color: #e55a2b;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+        }
+        
+        .filter-actions .btn-outline-secondary {
+            background: #f8f9fa;
+            border-color: #e0e0e0;
+            color: var(--text-primary);
+        }
+        
+        .filter-actions .btn-outline-secondary:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .filter-results-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        .filter-results-left {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        /* Standalone filter results styling */
+        #searchActiveFiltersContainer {
+            margin-top: 16px;
+            margin-bottom: 8px;
+        }
+        
+        #searchLeadsCount {
+            margin-bottom: 16px;
+        }
+        
+        .results-info {
+            background: var(--primary-white);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-light);
+        }
+        
+        .results-count {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .active-filters {
+            margin-top: 8px;
+        }
+        
+        .filter-tag {
+            display: inline-block;
+            background: var(--bright-orange);
+            color: var(--primary-white);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-right: 8px;
+            margin-bottom: 4px;
+            font-family: inherit;
+        }
+        
+        .filter-tag .remove-filter {
+            margin-left: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .pagination-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 24px;
+        }
+        
+        .pagination {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            background: #f8f9fa;
+            border-radius: 25px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            padding: 8px;
+            gap: 8px;
+        }
+        
+        .page-item {
+            display: flex;
+        }
+        
+        .page-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px;
+            text-decoration: none;
+            color: var(--bright-orange);
+            background: #ffffff;
+            border: none;
+            min-width: 40px;
+            height: 40px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border-radius: 20px;
+            margin: 0 4px;
+        }
+        
+        .page-item:first-child .page-link {
+            border-radius: 20px;
+        }
+        
+        .page-item:last-child .page-link {
+            border-radius: 20px;
+        }
+        
+        .page-item.active .page-link {
+            background: var(--bright-orange);
+            color: #ffffff;
+            border-radius: 20px;
+        }
+        
+        .page-item.disabled .page-link {
+            background: #f8f9fa;
+            color: #6c757d;
+            cursor: not-allowed;
+            border-radius: 20px;
+        }
+        
+        .page-link:hover:not(.disabled) {
+            background: #ffe4d6;
+            color: var(--bright-orange);
+            border-radius: 20px;
+        }
+        
+        .page-item.active .page-link:hover {
+            background: #e55a2b;
+            color: #ffffff;
+            border-radius: 20px;
+        }
+        
+        .page-subtitle {
+            font-size: 1.1rem;
+            opacity: 0.8;
+            margin: 8px 0 0 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="LongRun" height="35">
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/leads"><i class="fas fa-users me-1"></i>Leads</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/campaigns"><i class="fas fa-envelope me-1"></i>Campaigns</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#"><i class="fas fa-cog me-1"></i>Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="container">
+            <h1 class="page-title">Leads</h1>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Search and Filter Section -->
+        <div class="search-filter-section">
+            <div class="search-filter-row">
+                <!-- Search Field -->
+                <div class="search-container">
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search by name, email, etc.">
+                    <button id="searchBtn" class="search-button">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                
+                <!-- Filter Button -->
+                <button id="filterToggleBtn" class="filter-toggle-button">
+                    <span>Filters</span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+            
+            <!-- Collapsible Filter Options -->
+            <div id="filterOptions" class="filter-options" style="display: none;">
+                <div class="filter-grid">
+                    <div class="filter-item">
+                        <label class="filter-label">Campaign</label>
+                        <select id="campaignSelect" class="filter-select">
+                            <option value="">All Campaigns</option>
+                            <!-- Campaigns will be loaded dynamically -->
+                        </select>
+                    </div>
+                    
+                    <div class="filter-item">
+                        <label class="filter-label">Interested Status</label>
+                        <select id="interestedSelect" class="filter-select">
+                            <option value="" selected>All</option>
+                            <option value="interested">Interested</option>
+                            <option value="not_interested">Not Interested</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-item">
+                        <label class="filter-label">Replied Status</label>
+                        <select id="repliedSelect" class="filter-select">
+                            <option value="">All</option>
+                            <option value="replied">Replied</option>
+                            <option value="no_replies">No Replies</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-item">
+                        <label class="filter-label">Emails Sent</label>
+                        <select id="emailsSentSelect" class="filter-select">
+                            <option value="">All</option>
+                            <option value="1">1 email</option>
+                            <option value="2">2 emails</option>
+                            <option value="3">3 emails</option>
+                            <option value="1-3">1-3 emails</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-item">
+                        <label class="filter-label">Created Date</label>
+                        <div class="date-range-container">
+                            <input type="date" id="createdAfterInput" class="date-input" placeholder="From">
+                            <span class="date-separator">to</span>
+                            <input type="date" id="createdBeforeInput" class="date-input" placeholder="To">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filter Results and Actions Row -->
+                <div class="filter-results-actions">
+                    <!-- Left side: Active filters and leads count -->
+                    <div class="filter-results-left">
+                        <!-- Active Filters Tags -->
+                        <div id="activeFiltersContainer" class="active-filters-container" style="display: none;">
+                            <div class="active-filters" id="activeFilters"></div>
+                        </div>
+                        
+                        <!-- Leads Count -->
+                        <div class="leads-count" id="leadsCount">Loading leads...</div>
+                    </div>
+                    
+                    <!-- Right side: Action buttons -->
+                    <div class="filter-actions">
+                        <button id="applyFiltersBtn" class="btn btn-primary">
+                            <i class="fas fa-search me-1"></i>Apply Filters
+                        </button>
+                        <button id="clearFiltersBtn" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>Clear All
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Results (between search block and leads table) -->
+        <!-- Active Filters Tags -->
+        <div id="searchActiveFiltersContainer" class="active-filters-container" style="display: none;">
+            <div class="active-filters" id="searchActiveFilters"></div>
+        </div>
+        
+        <!-- Leads Count -->
+        <div class="leads-count" id="searchLeadsCount">Loading leads...</div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-container">
+            <div class="spinner"></div>
+            <p class="loading-text">Loading leads...</p>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <i class="fas fa-users"></i>
+            <h3>No Leads Found</h3>
+            <p>No leads match your current filters. Try adjusting your search criteria.</p>
+        </div>
+
+        <!-- Leads Container -->
+        <div id="leadsContainer" style="display: none;">
+            <div class="leads-table">
+                <!-- Table Header -->
+                <div class="table-header">
+                    <div class="table-header-row">
+                        <div>Lead Name</div>
+                        <div>Email</div>
+                        <div>Company</div>
+                        <div>Campaign</div>
+                        <div class="status-header">Status</div>
+                        <div>Date & Time</div>
+                    </div>
+                </div>
+                
+                <!-- Leads Rows -->
+                <div id="leadsRows">
+                    <!-- Leads will be dynamically loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="paginationContainer" class="pagination-container" style="display: none;">
+            <nav aria-label="Leads pagination">
+                <ul class="pagination" id="paginationList">
+                    <!-- Pagination will be dynamically generated -->
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Leads JavaScript -->
+    <script>
+        let leadsData = [];
+        let currentPage = 1;
+        let currentFilters = {};
+        let totalLeads = 0;
+        let lastPage = 1;
+        let perPage = 15; // EmailBison default is 15 per page
+        let savedFilterState = {}; // Store filter state when minimizing
+        let campaignNames = {}; // Store campaign ID to name mapping
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadCampaigns(); // Wait for campaigns to load first
+            loadLeads();
+            setupEventListeners();
+        });
+
+        // Setup event listeners
+        function setupEventListeners() {
+            document.getElementById('applyFiltersBtn').addEventListener('click', applyFilters);
+            document.getElementById('clearFiltersBtn').addEventListener('click', clearFilters);
+            document.getElementById('searchBtn').addEventListener('click', applyFilters);
+            document.getElementById('filterToggleBtn').addEventListener('click', toggleFilters);
+            document.getElementById('searchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    applyFilters();
+                }
+            });
+        }
+
+        // Load leads data
+        async function loadLeads(filters = {}) {
+            try {
+                showLoading();
+                
+                const params = new URLSearchParams();
+                if (filters.search) params.append('search', filters.search);
+                if (filters.campaign) params.append('campaign', filters.campaign);
+                if (filters.interested) params.append('interested', filters.interested);
+                if (filters.replied) params.append('replied', filters.replied);
+                if (filters.emails_sent) params.append('filters.emails_sent', filters.emails_sent);
+                if (filters.created_after) params.append('created_after', filters.created_after);
+                if (filters.created_before) params.append('created_before', filters.created_before);
+                params.append('page', currentPage);
+                params.append('per_page', perPage);
+
+                const url = `/api/leads?${params.toString()}`;
+                console.log('Fetching leads with URL:', url);
+                console.log('Filter parameters:', filters);
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    leadsData = data.leads;
+                    totalLeads = data.total;
+                    lastPage = data.last_page || 1;
+                    currentPage = data.current_page || currentPage;
+                    currentFilters = data.filters_applied || {};
+                    
+                    console.log('Leads loaded:', {
+                        leadsCount: leadsData.length,
+                        totalLeads: totalLeads,
+                        currentPage: currentPage,
+                        lastPage: lastPage,
+                        perPage: perPage,
+                        filters: currentFilters
+                    });
+                    
+                    renderLeads();
+                    updateResultsInfo(data.total, currentFilters);
+                    renderPagination();
+                } else {
+                    console.error('Failed to load leads:', data.error);
+                    showEmptyState();
+                }
+            } catch (error) {
+                console.error('Error loading leads:', error);
+                showEmptyState();
+            }
+        }
+
+        // Render leads
+        function renderLeads() {
+            const container = document.getElementById('leadsContainer');
+            const leadsRows = document.getElementById('leadsRows');
+            const loadingState = document.getElementById('loadingState');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (leadsData.length === 0) {
+                showEmptyState();
+                return;
+            }
+
+            loadingState.style.display = 'none';
+            emptyState.style.display = 'none';
+            container.style.display = 'block';
+
+            leadsRows.innerHTML = leadsData.map(lead => createLeadRow(lead)).join('');
+        }
+
+        // Create lead row HTML
+        function createLeadRow(lead) {
+            const fullName = `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'N/A';
+            
+            // Get campaign name from lead_campaign_data
+            let campaignName = 'N/A';
+            if (lead.lead_campaign_data && lead.lead_campaign_data.length > 0) {
+                const campaignData = lead.lead_campaign_data[0];
+                const campaignId = campaignData.campaign_id;
+                
+                // Try both string and number versions of the campaign ID
+                campaignName = campaignNames[campaignId] || 
+                              campaignNames[String(campaignId)] || 
+                              campaignNames[Number(campaignId)] || 
+                              `Campaign ${campaignId}` || 'N/A';
+                
+                // Debug logging
+                if (!campaignNames[campaignId] && !campaignNames[String(campaignId)] && !campaignNames[Number(campaignId)]) {
+                    console.log(`Campaign ID ${campaignId} (type: ${typeof campaignId}) not found in campaignNames:`, campaignNames);
+                }
+            }
+            
+            // Determine status based on lead data
+            let status = 'unverified';
+            let statusClass = 'status-unverified';
+            
+            if (lead.lead_campaign_data && lead.lead_campaign_data.length > 0) {
+                const campaignData = lead.lead_campaign_data[0];
+                
+                // Check if lead is interested
+                if (campaignData.interested === true) {
+                    status = 'interested';
+                    statusClass = 'status-interested';
+                }
+                // Check if lead has replied
+                else if (campaignData.replies && campaignData.replies > 0) {
+                    status = 'replied';
+                    statusClass = 'status-replied';
+                }
+                // Check if lead has been contacted (emails sent)
+                else if (campaignData.emails_sent && campaignData.emails_sent > 0) {
+                    status = 'contacted';
+                    statusClass = 'status-contacted';
+                }
+                // Lead has not been contacted yet
+                else {
+                    status = 'not contacted';
+                    statusClass = 'status-not-contacted';
+                }
+            }
+            
+            return `
+                <div class="lead-row" onclick="viewLead(${lead.id})">
+                    <div class="lead-name">${fullName}</div>
+                    <div class="lead-field ${lead.email ? '' : 'empty'}">${lead.email || 'N/A'}</div>
+                    <div class="lead-field ${lead.company ? '' : 'empty'}">${lead.company || 'N/A'}</div>
+                    <div class="lead-field">${campaignName}</div>
+                    <div class="lead-status ${statusClass}">${status}</div>
+                    <div class="lead-date">${lead.formatted_created_at || 'N/A'}</div>
+                </div>
+            `;
+        }
+
+        // Toggle filter options
+        function toggleFilters() {
+            const filterOptions = document.getElementById('filterOptions');
+            const toggleBtn = document.getElementById('filterToggleBtn');
+            
+            if (filterOptions.style.display === 'none') {
+                // Expanding filters - restore saved state
+                filterOptions.style.display = 'block';
+                toggleBtn.classList.add('active');
+                
+                // Restore saved filter values
+                if (Object.keys(savedFilterState).length > 0) {
+                    document.getElementById('searchInput').value = savedFilterState.search || '';
+                    document.getElementById('campaignSelect').value = savedFilterState.campaign || '';
+                    document.getElementById('interestedSelect').value = savedFilterState.interested || '';
+                    document.getElementById('repliedSelect').value = savedFilterState.replied || '';
+                    document.getElementById('emailsSentSelect').value = savedFilterState.emails_sent || '';
+                    document.getElementById('createdAfterInput').value = savedFilterState.created_after || '';
+                    document.getElementById('createdBeforeInput').value = savedFilterState.created_before || '';
+                } else {
+                    // Load campaigns when filters are opened for the first time
+                    loadCampaigns();
+                }
+            } else {
+                // Minimizing filters - save current state
+                savedFilterState = {
+                    search: document.getElementById('searchInput').value,
+                    campaign: document.getElementById('campaignSelect').value,
+                    interested: document.getElementById('interestedSelect').value,
+                    replied: document.getElementById('repliedSelect').value,
+                    emails_sent: document.getElementById('emailsSentSelect').value,
+                    created_after: document.getElementById('createdAfterInput').value,
+                    created_before: document.getElementById('createdBeforeInput').value
+                };
+                
+                filterOptions.style.display = 'none';
+                toggleBtn.classList.remove('active');
+            }
+        }
+
+        // Load campaigns for filter dropdown
+        async function loadCampaigns() {
+            try {
+                const response = await fetch('/api/campaigns');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const campaignSelect = document.getElementById('campaignSelect');
+                    campaignSelect.innerHTML = '<option value="">All Campaigns</option>';
+                    
+                    // Sort campaigns: active -> paused -> completed
+                    const sortedCampaigns = data.campaigns.sort((a, b) => {
+                        const statusOrder = {'active': 0, 'paused': 1, 'completed': 2, 'finished': 2};
+                        return (statusOrder[a.status] || 3) - (statusOrder[b.status] || 3);
+                    });
+                    
+                    // Clear and populate campaign names mapping
+                    campaignNames = {};
+                    
+                    sortedCampaigns.forEach(campaign => {
+                        const option = document.createElement('option');
+                        option.value = campaign.id;
+                        option.textContent = `${campaign.name} (${campaign.status})`;
+                        campaignSelect.appendChild(option);
+                        
+                        // Store campaign name for use in table
+                        campaignNames[campaign.id] = campaign.name;
+                    });
+                    
+                    console.log('Campaign names loaded:', campaignNames);
+                }
+            } catch (error) {
+                console.error('Error loading campaigns:', error);
+            }
+        }
+
+        // Apply filters
+        function applyFilters() {
+            const filters = {
+                search: document.getElementById('searchInput').value.trim(),
+                campaign: document.getElementById('campaignSelect').value,
+                interested: document.getElementById('interestedSelect').value,
+                replied: document.getElementById('repliedSelect').value,
+                emails_sent: document.getElementById('emailsSentSelect').value,
+                created_after: document.getElementById('createdAfterInput').value,
+                created_before: document.getElementById('createdBeforeInput').value
+            };
+            
+            console.log('Applying filters:', filters);
+            
+            currentPage = 1;
+            loadLeads(filters);
+        }
+
+        // Clear filters
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('campaignSelect').value = '';
+            document.getElementById('interestedSelect').value = '';
+            document.getElementById('repliedSelect').value = '';
+            document.getElementById('emailsSentSelect').value = '';
+            document.getElementById('createdAfterInput').value = '';
+            document.getElementById('createdBeforeInput').value = '';
+            
+            // Clear saved state as well
+            savedFilterState = {};
+            
+            currentPage = 1;
+            currentFilters = {};
+            loadLeads();
+        }
+
+        // Update results info
+        function updateResultsInfo(total, filters) {
+            const activeFiltersContainer = document.getElementById('activeFiltersContainer');
+            const leadsCount = document.getElementById('leadsCount');
+            const activeFilters = document.getElementById('activeFilters');
+            const filterOptions = document.getElementById('filterOptions');
+            
+            // Elements for standalone position (between search block and table)
+            const searchActiveFiltersContainer = document.getElementById('searchActiveFiltersContainer');
+            const searchLeadsCount = document.getElementById('searchLeadsCount');
+            const searchActiveFilters = document.getElementById('searchActiveFilters');
+            
+            // Update leads count text
+            const leadsCountText = `${total} lead${total !== 1 ? 's' : ''} found`;
+            leadsCount.textContent = leadsCountText;
+            searchLeadsCount.textContent = leadsCountText;
+            
+            // Check if filter options are visible
+            const isFilterOptionsVisible = filterOptions.style.display !== 'none';
+            
+            // Generate active filter tags
+            const activeFilterTags = [];
+            if (filters.search) {
+                activeFilterTags.push(`<span class="filter-tag">Search: "${filters.search}" <span class="remove-filter" onclick="removeFilter('search')">×</span></span>`);
+            }
+            if (filters.campaign) {
+                // Get campaign name from the dropdown
+                const campaignSelect = document.getElementById('campaignSelect');
+                const selectedOption = campaignSelect.options[campaignSelect.selectedIndex];
+                const campaignName = selectedOption ? selectedOption.textContent.split(' (')[0] : filters.campaign;
+                activeFilterTags.push(`<span class="filter-tag">Campaign: ${campaignName} <span class="remove-filter" onclick="removeFilter('campaign')">×</span></span>`);
+            }
+            if (filters.interested) {
+                const interestedText = filters.interested === 'interested' ? 'Interested' : 'Not Interested';
+                activeFilterTags.push(`<span class="filter-tag">Interested: ${interestedText} <span class="remove-filter" onclick="removeFilter('interested')">×</span></span>`);
+            }
+            if (filters.replied) {
+                const repliedText = filters.replied === 'replied' ? 'Replied' : 'No Replies';
+                activeFilterTags.push(`<span class="filter-tag">Replied: ${repliedText} <span class="remove-filter" onclick="removeFilter('replied')">×</span></span>`);
+            }
+            if (filters.emails_sent) {
+                const emailsText = filters.emails_sent === '1-3' ? '1-3 emails' : `${filters.emails_sent} email${filters.emails_sent !== '1' ? 's' : ''}`;
+                activeFilterTags.push(`<span class="filter-tag">Emails: ${emailsText} <span class="remove-filter" onclick="removeFilter('emails_sent')">×</span></span>`);
+            }
+            if (filters.created_after) {
+                activeFilterTags.push(`<span class="filter-tag">After: ${filters.created_after} <span class="remove-filter" onclick="removeFilter('created_after')">×</span></span>`);
+            }
+            if (filters.created_before) {
+                activeFilterTags.push(`<span class="filter-tag">Before: ${filters.created_before} <span class="remove-filter" onclick="removeFilter('created_before')">×</span></span>`);
+            }
+            
+            // Always show elements in standalone position (between search block and table)
+            if (activeFilterTags.length > 0) {
+                searchActiveFilters.innerHTML = activeFilterTags.join('');
+                searchActiveFiltersContainer.style.display = 'block';
+            } else {
+                searchActiveFiltersContainer.style.display = 'none';
+            }
+            searchLeadsCount.style.display = 'block';
+            
+            // Hide elements in bottom row (they're not used anymore)
+            activeFiltersContainer.style.display = 'none';
+            leadsCount.style.display = 'none';
+        }
+
+        // Remove specific filter
+        function removeFilter(filterType) {
+            switch(filterType) {
+                case 'search':
+                    document.getElementById('searchInput').value = '';
+                    break;
+                case 'campaign':
+                    document.getElementById('campaignSelect').value = '';
+                    break;
+                case 'interested':
+                    document.getElementById('interestedSelect').value = '';
+                    break;
+                case 'replied':
+                    document.getElementById('repliedSelect').value = '';
+                    break;
+                case 'emails_sent':
+                    document.getElementById('emailsSentSelect').value = '';
+                    break;
+                case 'created_after':
+                    document.getElementById('createdAfterInput').value = '';
+                    break;
+                case 'created_before':
+                    document.getElementById('createdBeforeInput').value = '';
+                    break;
+            }
+            applyFilters();
+        }
+
+        // Show loading state
+        function showLoading() {
+            document.getElementById('loadingState').style.display = 'block';
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('leadsContainer').style.display = 'none';
+            document.getElementById('activeFiltersContainer').style.display = 'none';
+        }
+
+        // Render pagination
+        function renderPagination() {
+            const paginationContainer = document.getElementById('paginationContainer');
+            const paginationList = document.getElementById('paginationList');
+            
+            console.log('Rendering pagination:', {
+                totalLeads: totalLeads,
+                lastPage: lastPage,
+                currentPage: currentPage,
+                perPage: perPage
+            });
+            
+            // Use lastPage from EmailBison API instead of calculating
+            if (lastPage <= 1) {
+                console.log('Hiding pagination - only one page or no leads');
+                paginationContainer.style.display = 'none';
+                return;
+            }
+            
+            let paginationHTML = '';
+            
+            // Previous button
+            if (currentPage > 1) {
+                paginationHTML += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                `;
+            } else {
+                paginationHTML += `
+                    <li class="page-item disabled">
+                        <span class="page-link">
+                            <i class="fas fa-chevron-left"></i>
+                        </span>
+                    </li>
+                `;
+            }
+            
+            // Always show first page
+            if (currentPage === 1) {
+                paginationHTML += `
+                    <li class="page-item active">
+                        <span class="page-link">1</span>
+                    </li>
+                `;
+            } else {
+                paginationHTML += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="changePage(1)">1</a>
+                    </li>
+                `;
+            }
+            
+            // Show middle pages (current page and surrounding pages)
+            const maxVisiblePages = 3; // Show current page and 1 page on each side
+            let startPage = Math.max(2, currentPage - 1);
+            let endPage = Math.min(lastPage - 1, currentPage + 1);
+            
+            // Add ellipsis if there's a gap between first page and middle pages
+            if (startPage > 2) {
+                paginationHTML += `
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                `;
+            }
+            
+            // Add middle pages
+            for (let i = startPage; i <= endPage; i++) {
+                if (i === currentPage) {
+                    paginationHTML += `
+                        <li class="page-item active">
+                            <span class="page-link">${i}</span>
+                        </li>
+                    `;
+                } else {
+                    paginationHTML += `
+                        <li class="page-item">
+                            <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+                        </li>
+                    `;
+                }
+            }
+            
+            // Add ellipsis if there's a gap between middle pages and last page
+            if (endPage < lastPage - 1) {
+                paginationHTML += `
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                `;
+            }
+            
+            // Always show last page (if it's not already shown)
+            if (lastPage > 1) {
+                if (currentPage === lastPage) {
+                    paginationHTML += `
+                        <li class="page-item active">
+                            <span class="page-link">${lastPage}</span>
+                        </li>
+                    `;
+                } else {
+                    paginationHTML += `
+                        <li class="page-item">
+                            <a class="page-link" href="#" onclick="changePage(${lastPage})">${lastPage}</a>
+                        </li>
+                    `;
+                }
+            }
+            
+            // Next button
+            if (currentPage < lastPage) {
+                paginationHTML += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                `;
+            } else {
+                paginationHTML += `
+                    <li class="page-item disabled">
+                        <span class="page-link">
+                            <i class="fas fa-chevron-right"></i>
+                        </span>
+                    </li>
+                `;
+            }
+            
+            paginationList.innerHTML = paginationHTML;
+            paginationContainer.style.display = 'flex';
+            
+            console.log('Pagination rendered successfully');
+        }
+        
+        // Change page
+        function changePage(page) {
+            console.log('Changing to page:', page);
+            currentPage = page;
+            loadLeads(currentFilters);
+        }
+        
+        // View lead details
+        function viewLead(leadId) {
+            window.location.href = `/lead/${leadId}`;
+        }
+        
+        // Show empty state
+        function showEmptyState() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'block';
+            document.getElementById('leadsContainer').style.display = 'none';
+            document.getElementById('activeFiltersContainer').style.display = 'none';
+            document.getElementById('paginationContainer').style.display = 'none';
+        }
+    </script>
+
+    <!-- Bottom Spacing -->
+    <div style="height: 30px;"></div>
+</body>
+</html>
